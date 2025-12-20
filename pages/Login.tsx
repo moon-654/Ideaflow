@@ -1,51 +1,72 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProposalStore } from '../context/ProposalContext';
-import { Lock, User, ArrowRight } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { loginWithOpenProject } from '../services/openProject';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { setCurrentUser } = useProposalStore();
-    const [email, setEmail] = useState('');
+    const { setCurrentUser, users } = useProposalStore();
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const processLogin = (user: any) => {
+        // Check if user exists in synced users to get their assigned IdeaFlow role
+        const syncedUser = users.find(u =>
+            u.id === user.id ||
+            u.email === user.email ||
+            u.name === user.name
+        );
+
+        // Determine role:
+        // 1. Use existing role from synced users if available
+        // 2. If no users exist yet (first user), assign Admin
+        // 3. Otherwise, use the default role from login (User)
+        let assignedRole = user.role || 'User';
+
+        if (syncedUser && syncedUser.role) {
+            assignedRole = syncedUser.role;
+        } else if (users.length === 0) {
+            // First user becomes Admin
+            assignedRole = 'Admin';
+            console.log('[Login] First user - automatically assigned Admin role');
+        }
+
+        const finalUser = {
+            ...user,
+            role: assignedRole,
+            department: syncedUser?.department || user.department
+        };
+
+        setCurrentUser(finalUser);
+        toast.success(`환영합니다! ${finalUser.name}님. (${assignedRole})`);
+        navigate('/');
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!username.trim() || !password) {
+            toast.error('아이디와 비밀번호를 입력해주세요.');
+            return;
+        }
 
-        // Mock Authentication Logic
-        if (email === 'user@example.com' && password === 'password') {
-            setCurrentUser({
-                id: 'u1',
-                name: '김철수',
-                department: '생산관리팀',
-                role: 'User',
-                email: 'user@example.com'
-            });
-            toast.success('환영합니다! 김철수님.');
-            navigate('/');
-        } else if (email === 'reviewer@example.com' && password === 'password') {
-            setCurrentUser({
-                id: 'u2',
-                name: '이영희',
-                department: '품질관리팀',
-                role: 'Reviewer',
-                email: 'reviewer@example.com'
-            });
-            toast.success('환영합니다! 이영희 심사위원님.');
-            navigate('/');
-        } else if (email === 'admin@example.com' && password === 'password') {
-            setCurrentUser({
-                id: 'u3',
-                name: '박관리',
-                department: '인사팀',
-                role: 'Admin',
-                email: 'admin@example.com'
-            });
-            toast.success('관리자 모드로 로그인되었습니다.');
-            navigate('/');
-        } else {
-            toast.error('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setIsLoading(true);
+
+        try {
+            const result = await loginWithOpenProject(username, password);
+
+            if (result.success && result.user) {
+                processLogin(result.user);
+            } else {
+                toast.error(result.error || '로그인에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            toast.error('로그인 중 오류가 발생했습니다.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -59,16 +80,17 @@ const Login: React.FC = () => {
 
                 <form onSubmit={handleLogin} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">이메일</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">아이디</label>
                         <div className="relative">
                             <User className="absolute left-3 top-3 text-slate-400" size={20} />
                             <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-medium"
-                                placeholder="user@example.com"
-                                required
+                                placeholder="OpenProject 아이디 (이메일)"
+                                disabled={isLoading}
+                                autoComplete="username"
                             />
                         </div>
                     </div>
@@ -82,37 +104,29 @@ const Login: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-medium"
-                                placeholder="••••••••"
-                                required
+                                placeholder="비밀번호"
+                                disabled={isLoading}
+                                autoComplete="current-password"
                             />
                         </div>
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95"
+                        disabled={isLoading || !username.trim() || !password}
+                        className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        로그인 <ArrowRight size={20} />
+                        {isLoading ? (
+                            <><Loader2 size={20} className="animate-spin" /> 로그인 중...</>
+                        ) : (
+                            <>로그인 <ArrowRight size={20} /></>
+                        )}
                     </button>
                 </form>
 
-                <div className="mt-8 pt-6 border-t border-gray-100">
-                    <p className="text-center text-xs text-slate-400 mb-4 font-bold uppercase">테스트 계정 정보</p>
-                    <div className="grid grid-cols-3 gap-2 text-xs text-center">
-                        <div className="p-2 bg-slate-50 rounded border border-gray-200 cursor-pointer hover:bg-slate-100" onClick={() => { setEmail('user@example.com'); setPassword('password'); }}>
-                            <span className="block font-bold text-slate-700">일반</span>
-                            <span className="text-slate-400">user</span>
-                        </div>
-                        <div className="p-2 bg-slate-50 rounded border border-gray-200 cursor-pointer hover:bg-slate-100" onClick={() => { setEmail('reviewer@example.com'); setPassword('password'); }}>
-                            <span className="block font-bold text-slate-700">심사</span>
-                            <span className="text-slate-400">reviewer</span>
-                        </div>
-                        <div className="p-2 bg-slate-50 rounded border border-gray-200 cursor-pointer hover:bg-slate-100" onClick={() => { setEmail('admin@example.com'); setPassword('password'); }}>
-                            <span className="block font-bold text-slate-700">관리자</span>
-                            <span className="text-slate-400">admin</span>
-                        </div>
-                    </div>
-                </div>
+                <p className="text-center text-xs text-slate-400 mt-6">
+                    OpenProject 계정으로 로그인하세요
+                </p>
             </div>
         </div>
     );

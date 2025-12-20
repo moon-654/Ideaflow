@@ -4,7 +4,7 @@ import { Users, Building, Activity, AlertCircle, Plus, Trash2, Shield, Search } 
 import { toast } from 'sonner';
 
 const Admin: React.FC = () => {
-    const { users, departments, systemLogs, addUser, removeUser, addDepartment, removeDepartment } = useProposalStore();
+    const { users, departments, systemLogs, addUser, removeUser, updateUserRole, addDepartment, removeDepartment } = useProposalStore();
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'depts' | 'logs'>('overview');
 
     // User Management State
@@ -39,6 +39,16 @@ const Admin: React.FC = () => {
         });
         setNewDept({ name: '', managerId: '' });
         toast.success('부서가 추가되었습니다.');
+    };
+
+    const handleRoleChange = (userId: string, newRole: string, userName: string) => {
+        updateUserRole(userId, newRole);
+        const roleNames: Record<string, string> = {
+            User: '일반 사용자',
+            Reviewer: '심사위원',
+            Admin: '관리자'
+        };
+        toast.success(`${userName}님의 권한이 ${roleNames[newRole] || newRole}(으)로 변경되었습니다.`);
     };
 
     return (
@@ -110,9 +120,9 @@ const Admin: React.FC = () => {
                                 value={newUser.role}
                                 onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                             >
-                                <option value="User">User</option>
-                                <option value="Reviewer">Reviewer</option>
-                                <option value="Admin">Admin</option>
+                                <option value="User">일반 사용자</option>
+                                <option value="Reviewer">심사위원</option>
+                                <option value="Admin">관리자</option>
                             </select>
                             <button
                                 onClick={handleAddUser}
@@ -136,13 +146,19 @@ const Admin: React.FC = () => {
                                         <td className="p-4 font-bold">{user.name}</td>
                                         <td className="p-4 text-slate-500">{user.department}</td>
                                         <td className="p-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold border
-                        ${user.role === 'Admin' ? 'bg-red-50 text-red-700 border-red-100' :
-                                                    user.role === 'Reviewer' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                        'bg-blue-50 text-blue-700 border-blue-100'}
-                      `}>
-                                                {user.role}
-                                            </span>
+                                            <select
+                                                className={`px-2 py-1 rounded text-xs font-bold border cursor-pointer
+                                                    ${user.role === 'Admin' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        user.role === 'Reviewer' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                            'bg-blue-50 text-blue-700 border-blue-200'}
+                                                `}
+                                                value={user.role}
+                                                onChange={(e) => handleRoleChange(user.id, e.target.value, user.name)}
+                                            >
+                                                <option value="User">일반 사용자</option>
+                                                <option value="Reviewer">심사위원</option>
+                                                <option value="Admin">관리자</option>
+                                            </select>
                                         </td>
                                         <td className="p-4 text-center">
                                             <button onClick={() => removeUser(user.id)} className="text-slate-400 hover:text-red-500">

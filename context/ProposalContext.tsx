@@ -6,6 +6,8 @@ const MOCK_USERS: User[] = [
     { id: 'user1', name: '김철수', role: 'User', department: '생산관리팀', avatarUrl: '' },
     { id: 'user2', name: '이영희', role: 'Reviewer', department: '인사팀', avatarUrl: '' },
     { id: 'user3', name: '박민수', role: 'Admin', department: 'IT지원팀', avatarUrl: '' },
+    // IdeaFlow Admin - 문현진
+    { id: '5', name: 'Hyunjin', role: 'Admin', department: 'Moon', avatarUrl: '', email: 'hyunjin_moon@ashimori.co.kr' },
 ];
 
 const MOCK_DEPARTMENTS: Department[] = [
@@ -54,6 +56,7 @@ interface ProposalContextType {
     setCurrentUser: (user: User) => void;
     addUser: (user: User) => void;
     removeUser: (id: string) => void;
+    updateUserRole: (userId: string, newRole: string) => void;
     syncUsersFromOpenProject: () => Promise<void>;
     syncProjectsFromOpenProject: () => Promise<void>;
     addDepartment: (dept: Department) => void;
@@ -210,6 +213,24 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const addUser = (user: User) => setUsers(prev => [...prev, user]);
     const removeUser = (id: string) => setUsers(prev => prev.filter(u => u.id !== id));
 
+    const updateUserRole = (userId: string, newRole: string) => {
+        setUsers(prev => prev.map(u =>
+            u.id === userId ? { ...u, role: newRole } : u
+        ));
+        // Add system log for role change
+        const targetUser = users.find(u => u.id === userId);
+        if (targetUser) {
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'Role Change',
+                details: `${targetUser.name}의 역할을 ${newRole}(으)로 변경`,
+                level: 'Info'
+            });
+        }
+    };
+
     const addDepartment = (dept: Department) => setDepartments(prev => [...prev, dept]);
     const removeDepartment = (id: string) => setDepartments(prev => prev.filter(d => d.id !== id));
 
@@ -349,6 +370,7 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             systemLogs,
             addUser,
             removeUser,
+            updateUserRole,
             addDepartment,
             removeDepartment,
             addSystemLog,

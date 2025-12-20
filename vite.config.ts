@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { openProjectLoginPlugin } from './plugins/openProjectLogin';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -18,17 +19,21 @@ export default defineConfig(({ mode }) => {
               console.log('proxy error', err);
             });
             proxy.on('proxyReq', (proxyReq, req, _res) => {
-              // Dynamic Header Injection
-              // We read the raw key sent from client and construct the Basic Auth header here in Node environment
-              // This avoids browser-side encoding issues and header stripping
+              // Handle API Key authentication (for sync operations)
               const customKey = req.headers['x-openproject-auth-key'];
               if (customKey) {
                 const authString = 'apikey:' + customKey;
                 const authHeader = 'Basic ' + Buffer.from(authString).toString('base64');
                 proxyReq.setHeader('Authorization', authHeader);
-                proxyReq.removeHeader('x-openproject-auth-key'); // Clean up
-                console.log('Proxy: Injected Authorization header. Key Length:', (customKey as string).length);
-                console.log('Proxy: Key Preview (first 50):', (customKey as string).substring(0, 50));
+                proxyReq.removeHeader('x-openproject-auth-key');
+                console.log('Proxy: Injected API Key Authorization. Key Length:', (customKey as string).length);
+              }
+
+              // Forward existing Authorization header (for user login)
+              const authHeader = req.headers['authorization'];
+              if (authHeader && !customKey) {
+                proxyReq.setHeader('Authorization', authHeader as string);
+                console.log('Proxy: Forwarding user Authorization header');
               }
             });
             proxy.on('proxyRes', (proxyRes, req, _res) => {
@@ -38,13 +43,12 @@ export default defineConfig(({ mode }) => {
                 delete proxyRes.headers['www-authenticate'];
                 console.log('Proxy: Stripped WWW-Authenticate header to suppress popup');
               }
-              console.log('Res Headers:', proxyRes.headers);
             });
           },
         }
       }
     },
-    plugins: [react()],
+    plugins: [react(), openProjectLoginPlugin()],
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
