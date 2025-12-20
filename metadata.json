@@ -1,0 +1,5 @@
+{
+  "name": "IdeaFlow IMS",
+  "description": "기업 환경을 위한 포괄적인 아이디어 제안 관리 시스템(IMS). 제안 등록, 다단계 심의 평가표, 실행 부서 검토, 포상 관리 및 분석 대시보드 기능을 포함합니다.",
+  "requestFramePermissions": []
+}
