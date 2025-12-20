@@ -1,29 +1,42 @@
 import React from 'react';
-import { LayoutDashboard, FileText, CheckSquare, Layers, Award, Settings, Lightbulb, LogOut, ChevronRight, PenTool } from 'lucide-react';
-import { CURRENT_USER } from '../constants';
+import { useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileText, Layers, Award, Settings, Lightbulb, LogOut, ChevronRight, PenTool, User, Shield } from 'lucide-react';
+import { useProposalStore } from '../context/ProposalContext';
 
 interface SidebarProps {
   activeTab: string;
-  setActiveTab: (tab: string) => void;
   isMobileOpen: boolean;
   setIsMobileOpen: (open: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, isMobileOpen, setIsMobileOpen }) => {
+  const navigate = useNavigate();
+  const { currentUser } = useProposalStore();
+
   const menuItems = [
-    { id: 'dashboard', label: '대시보드', icon: <LayoutDashboard size={20} /> },
-    { id: 'proposals', label: '제안 등록', icon: <PenTool size={20} /> },
-    { id: 'dept_review', label: '부서 검토', icon: <FileText size={20} /> },
-    { id: 'evaluation', label: '심의 평가 (1차/2차)', icon: <Layers size={20} /> },
-    { id: 'rewards', label: '포상 및 마일리지', icon: <Award size={20} /> },
-    { id: 'settings', label: '시스템 설정', icon: <Settings size={20} /> },
+    { id: 'dashboard', label: '대시보드', icon: <LayoutDashboard size={20} />, path: '/', roles: ['User', 'Reviewer', 'Admin'] },
+    { id: 'public_proposals', label: '전체 제안', icon: <FileText size={20} />, path: '/public-proposals', roles: ['User', 'Reviewer', 'Admin'] },
+    { id: 'proposals', label: '제안 등록', icon: <PenTool size={20} />, path: '/proposals', roles: ['User', 'Reviewer', 'Admin'] },
+    { id: 'dept_review', label: '부서 검토', icon: <FileText size={20} />, path: '/dept_review', roles: ['Reviewer', 'Admin'] },
+    { id: 'evaluation', label: '심의 평가 (1차/2차)', icon: <Layers size={20} />, path: '/evaluation', roles: ['Reviewer', 'Admin'] },
+    { id: 'rewards', label: '포상 및 마일리지', icon: <Award size={20} />, path: '/rewards', roles: ['User', 'Reviewer', 'Admin'] },
+    { id: 'profile', label: '마이 페이지', icon: <User size={20} />, path: '/profile', roles: ['User', 'Reviewer', 'Admin'] },
+    { id: 'admin', label: '관리자', icon: <Shield size={20} />, path: '/admin', roles: ['Admin'] },
+    { id: 'settings', label: '시스템 설정', icon: <Settings size={20} />, path: '/settings', roles: ['Admin'] },
   ];
+
+  const filteredItems = menuItems.filter(item => item.roles.includes(currentUser.role || 'User'));
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    setIsMobileOpen(false);
+  };
 
   return (
     <>
       {/* Mobile Overlay */}
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
@@ -48,41 +61,41 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isMobileOpen
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-3">
             메인 메뉴
           </div>
-          {menuItems.map((item) => (
+          {filteredItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => {
-                setActiveTab(item.id);
-                setIsMobileOpen(false);
-              }}
+              onClick={() => handleNavigation(item.path)}
               className={`
                 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group
-                ${activeTab === item.id 
-                  ? 'bg-primary/10 text-primary' 
+                ${activeTab === item.id || (item.id === 'dashboard' && activeTab === '')
+                  ? 'bg-primary/10 text-primary'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-primary'}
               `}
             >
-              <span className={`transition-colors ${activeTab === item.id ? 'text-primary' : 'text-slate-400 group-hover:text-primary'}`}>
+              <span className={`transition-colors ${activeTab === item.id || (item.id === 'dashboard' && activeTab === '') ? 'text-primary' : 'text-slate-400 group-hover:text-primary'}`}>
                 {item.icon}
               </span>
               {item.label}
-              {activeTab === item.id && <ChevronRight size={16} className="ml-auto" />}
+              {(activeTab === item.id || (item.id === 'dashboard' && activeTab === '')) && <ChevronRight size={16} className="ml-auto" />}
             </button>
           ))}
         </nav>
 
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-gray-100">
-            <img 
-              src={CURRENT_USER.avatarUrl} 
-              alt={CURRENT_USER.name} 
+            <img
+              src={currentUser.avatarUrl || "https://ui-avatars.com/api/?name=" + currentUser.name}
+              alt={currentUser.name}
               className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
             />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate">{CURRENT_USER.name}</p>
-              <p className="text-xs text-slate-500 truncate">{CURRENT_USER.department}</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{currentUser.name}</p>
+              <p className="text-xs text-slate-500 truncate">{currentUser.dept || currentUser.department}</p>
             </div>
-            <button className="text-slate-400 hover:text-slate-600">
+            <button
+              onClick={() => navigate('/login')}
+              className="text-slate-400 hover:text-slate-600"
+            >
               <LogOut size={18} />
             </button>
           </div>

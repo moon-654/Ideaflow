@@ -1,0 +1,42 @@
+# Tasks
+
+- [x] Explore codebase for unimplemented features <!-- id: 0 -->
+    - [x] Search for "TODO" and "FIXME" <!-- id: 1 -->
+    - [x] Analyze `pages` directory <!-- id: 2 -->
+    - [x] Read `App.tsx` to understand routing <!-- id: 3 -->
+- [x] Create implementation plan (`plan.md`) <!-- id: 4 -->
+- [ ] Implement State Management <!-- id: 5 -->
+    - [x] Create `ProposalContext.tsx` <!-- id: 6 -->
+    - [x] Wrap `App` with `ProposalProvider` <!-- id: 7 -->
+- [ ] Refactor Components to Use Store <!-- id: 8 -->
+    - [x] Dashboard <!-- id: 9 -->
+    - [x] ProposalSubmit <!-- id: 10 -->
+    - [x] Evaluation <!-- id: 11 -->
+    - [x] Rewards <!-- id: 12 -->
+    - [x] Settings <!-- id: 13 -->
+- [x] Verify Implementation <!-- id: 14 -->
+    - [x] Run Build <!-- id: 15 -->
+    - [x] Create Walkthrough <!-- id: 16 -->
+- [ ] Phase 3: UI/UX Enhancements <!-- id: 17 -->
+    - [x] Install `sonner` for toasts <!-- id: 18 -->
+    - [x] Add `Toaster` to `App.tsx` <!-- id: 19 -->
+    - [x] Replace `alert()` with toasts <!-- id: 20 -->
+        - [x] ProposalSubmit <!-- id: 21 -->
+        - [x] Evaluation <!-- id: 22 -->
+        - [x] Settings <!-- id: 23 -->
+        - [x] Settings <!-- id: 23 -->
+- [ ] Phase 4: Expansion & Role-Based Features <!-- id: 24 -->
+    - [x] Authentication (Login Page) <!-- id: 25 -->
+    - [x] Role-Based UI (Sidebar/Dashboard) <!-- id: 36 -->
+    - [x] Proposal Detail View <!-- id: 26 -->
+    - [x] Public Proposal List (All Proposals) <!-- id: 37 -->
+    - [x] My Page / Profile <!-- id: 27 -->
+- [/] Phase 5: Admin & System Hardening <!-- id: 28 -->
+    - [x] Admin Dashboard <!-- id: 29 -->
+    - [/] SSO Integration (KT BizOffice Mock) <!-- id: 33 -->
+    - [ ] Search & Archive <!-- id: 30 -->
+- [ ] Phase 6: Advanced Workflow & Engagement <!-- id: 31 -->
+    - [ ] Comment System <!-- id: 32 -->
+    - [ ] Return for Modification Flow <!-- id: 33 -->
+    - [ ] Leaderboards & Gamification <!-- id: 34 -->
+    - [ ] Mobile PWA Support <!-- id: 35 -->

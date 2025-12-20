@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MOCK_MILEAGE_LOGS } from '../constants';
+import React from 'react';
+import { useProposalStore } from '../context/ProposalContext';
 import { Download, RefreshCw, CheckCircle, Wallet, History, Send } from 'lucide-react';
 
 const TYPE_MAP: Record<string, string> = {
@@ -12,16 +12,21 @@ const TYPE_MAP: Record<string, string> = {
 };
 
 const Rewards: React.FC = () => {
-  const [logs, setLogs] = useState(MOCK_MILEAGE_LOGS);
+  const { mileageLogs, updateMileageLog } = useProposalStore();
 
-  const pendingPoints = logs.filter(l => l.status === 'Accrued').reduce((acc, curr) => acc + curr.points, 0);
-  const totalPaid = logs.filter(l => l.status === 'Paid').reduce((acc, curr) => acc + curr.points, 0);
+  const pendingPoints = mileageLogs.filter(l => l.status === 'Accrued').reduce((acc, curr) => acc + curr.points, 0);
+  const totalPaid = mileageLogs.filter(l => l.status === 'Paid').reduce((acc, curr) => acc + curr.points, 0);
 
   const processPayout = () => {
-    if(pendingPoints === 0) return;
+    if (pendingPoints === 0) return;
     const confirm = window.confirm(`${pendingPoints} 포인트를 일괄 지급 처리하시겠습니까? \n모든 적립 상태가 '지급 완료'로 변경됩니다.`);
-    if(confirm) {
-      setLogs(prev => prev.map(l => l.status === 'Accrued' ? { ...l, status: 'Paid' } : l));
+    if (confirm) {
+      // Update all accrued logs to paid
+      mileageLogs.forEach(log => {
+        if (log.status === 'Accrued') {
+          updateMileageLog(log.id, { status: 'Paid' });
+        }
+      });
     }
   };
 
@@ -34,7 +39,7 @@ const Rewards: React.FC = () => {
           <p className="text-slate-500 mt-1">제안 활동 포인트 현황 조회 및 지급 처리.</p>
         </div>
         <div className="flex gap-2">
-           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-slate-50">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-slate-50">
             <Download size={16} /> 엑셀 다운로드
           </button>
         </div>
@@ -44,29 +49,29 @@ const Rewards: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-primary to-blue-600 p-6 rounded-xl shadow-lg text-white relative overflow-hidden">
           <div className="relative z-10">
-             <div className="flex items-center gap-2 mb-2 opacity-90">
-                <Wallet size={20} />
-                <span className="text-sm font-bold uppercase tracking-wider">지급 대기 포인트</span>
-             </div>
-             <div className="text-4xl font-black">{pendingPoints.toLocaleString()} <span className="text-lg font-medium opacity-80">점</span></div>
+            <div className="flex items-center gap-2 mb-2 opacity-90">
+              <Wallet size={20} />
+              <span className="text-sm font-bold uppercase tracking-wider">지급 대기 포인트</span>
+            </div>
+            <div className="text-4xl font-black">{pendingPoints.toLocaleString()} <span className="text-lg font-medium opacity-80">점</span></div>
           </div>
           <Wallet className="absolute -bottom-4 -right-4 w-32 h-32 opacity-10 rotate-12" />
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-           <div className="text-sm font-medium text-slate-500 mb-1">누적 지급 완료</div>
-           <div className="text-3xl font-bold text-slate-900">{totalPaid.toLocaleString()} <span className="text-sm font-normal text-slate-400">점</span></div>
+          <div className="text-sm font-medium text-slate-500 mb-1">누적 지급 완료</div>
+          <div className="text-3xl font-bold text-slate-900">{totalPaid.toLocaleString()} <span className="text-sm font-normal text-slate-400">점</span></div>
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
-           <div className="text-sm font-medium text-slate-500 mb-3">관리자 작업</div>
-           <button 
-             onClick={processPayout}
-             disabled={pendingPoints === 0}
-             className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-           >
-             <Send size={16} /> 일괄 지급 처리
-           </button>
+          <div className="text-sm font-medium text-slate-500 mb-3">관리자 작업</div>
+          <button
+            onClick={processPayout}
+            disabled={pendingPoints === 0}
+            className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <Send size={16} /> 일괄 지급 처리
+          </button>
         </div>
       </div>
 
@@ -76,7 +81,7 @@ const Rewards: React.FC = () => {
           <h3 className="font-bold text-slate-900 flex items-center gap-2"><History size={18} /> 마일리지 이력</h3>
           <span className="text-xs text-slate-500">지급 기준: 등록(1), 부서통과(2), S급(100), A급(50), B급(30), C급(10)</span>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-gray-200">
@@ -90,7 +95,7 @@ const Rewards: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {logs.map((log) => (
+              {mileageLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                   <td className="p-4 text-slate-500 whitespace-nowrap">{log.date}</td>
                   <td className="p-4">

@@ -1,31 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useProposalStore } from '../context/ProposalContext';
 import { Save, Bell, Users, Coins, ToggleLeft, ToggleRight, Plus, Trash2, Mail, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Settings: React.FC = () => {
-  // Notification States
-  const [notifications, setNotifications] = useState({
-    newProposal: true,
-    deptReview: true,
-    reject: false,
-    finalGrade: true,
-  });
+  const { settings, updateSettings } = useProposalStore();
 
-  // Mileage Policy States
-  const [mileageRules, setMileageRules] = useState({
-    registration: 1,
-    deptPass: 2,
-    gradeS: 100,
-    gradeA: 50,
-    gradeB: 30,
-    gradeC: 10,
-  });
+  // Local state for edits (initialized from store)
+  const [notifications, setNotifications] = useState(settings.notifications);
+  const [mileageRules, setMileageRules] = useState(settings.mileageRules);
+  const [members, setMembers] = useState(settings.members);
 
-  // Mock Committee Members
-  const [members, setMembers] = useState([
-    { id: 1, name: '김철수 팀장', dept: '인사팀', role: '1차 심의위원' },
-    { id: 2, name: '박영희 상무', dept: '경영지원본부', role: '2차 심의위원' },
-    { id: 3, name: '최민수 수석', dept: '기술연구소', role: '1차 심의위원' },
-  ]);
+  // Sync local state when store changes (e.g. on mount or reset)
+  useEffect(() => {
+    setNotifications(settings.notifications);
+    setMileageRules(settings.mileageRules);
+    setMembers(settings.members);
+  }, [settings]);
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
@@ -40,7 +31,12 @@ const Settings: React.FC = () => {
   };
 
   const handleSave = () => {
-    alert('시스템 설정이 저장되었습니다.');
+    updateSettings({
+      notifications,
+      mileageRules,
+      members
+    });
+    toast.success('시스템 설정이 저장되었습니다.');
   };
 
   return (
@@ -50,7 +46,7 @@ const Settings: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">시스템 설정</h1>
           <p className="text-slate-500 mt-1">알림, 포상 정책 및 심의 위원 권한을 관리합니다.</p>
         </div>
-        <button 
+        <button
           onClick={handleSave}
           className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition-all active:scale-95"
         >
@@ -59,7 +55,7 @@ const Settings: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* 1. Mileage Policy Section */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-gray-100 bg-slate-50 flex items-center gap-2">
@@ -71,8 +67,8 @@ const Settings: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">제안 등록 (참가상)</label>
                 <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={mileageRules.registration}
                     onChange={(e) => handleMileageChange('registration', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
@@ -83,8 +79,8 @@ const Settings: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">부서 검토 통과</label>
                 <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={mileageRules.deptPass}
                     onChange={(e) => handleMileageChange('deptPass', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
@@ -93,7 +89,7 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="pt-4 border-t border-gray-100">
               <label className="text-xs font-bold text-slate-500 uppercase block mb-3">최종 등급별 포상</label>
               <div className="grid grid-cols-2 gap-4">
@@ -101,8 +97,8 @@ const Settings: React.FC = () => {
                   <div key={grade} className="flex items-center justify-between p-3 rounded bg-slate-50 border border-gray-200">
                     <span className="font-bold text-slate-700 w-8">{grade}급</span>
                     <div className="flex items-center gap-2 w-32">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={mileageRules[`grade${grade}` as keyof typeof mileageRules]}
                         onChange={(e) => handleMileageChange(`grade${grade}` as keyof typeof mileageRules, e.target.value)}
                         className="w-full px-2 py-1 text-right border border-gray-300 rounded text-sm font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
@@ -134,7 +130,7 @@ const Settings: React.FC = () => {
                   <p className="font-bold text-slate-900">{item.label}</p>
                   <p className="text-xs text-slate-500">{item.desc}</p>
                 </div>
-                <button 
+                <button
                   onClick={() => toggleNotification(item.key as keyof typeof notifications)}
                   className={`text-2xl transition-colors ${notifications[item.key as keyof typeof notifications] ? 'text-primary' : 'text-slate-300'}`}
                 >
@@ -144,9 +140,9 @@ const Settings: React.FC = () => {
             ))}
           </div>
           <div className="p-4 bg-slate-50 border-t border-gray-100 text-center">
-             <button className="text-xs font-bold text-slate-500 flex items-center justify-center gap-1 hover:text-primary">
-               <Mail size={12} /> 메일 템플릿 편집
-             </button>
+            <button className="text-xs font-bold text-slate-500 flex items-center justify-center gap-1 hover:text-primary">
+              <Mail size={12} /> 메일 템플릿 편집
+            </button>
           </div>
         </div>
 
@@ -190,7 +186,7 @@ const Settings: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <button 
+                      <button
                         onClick={() => removeMember(member.id)}
                         className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
                       >
