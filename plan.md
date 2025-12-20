@@ -45,6 +45,22 @@ Improve the user experience with better feedback.
     - [x] Ensure charts in `Dashboard.tsx` reflect real-time data from the store.
     - [x] Add "My Proposals" list for general users.
 
+## Phase 3.5: OpenProject Deep Integration
+Leverage the established connection to enrich the application data.
+
+- [x] **Data Utilization**
+    - [x] **Committee Management**: Replace manual input with **Search & Select** from synced OpenProject users in `Settings.tsx`.
+    - [ ] **Proposal Submission**: Display "Department" automatically based on logged-in user (mapped from OP).
+
+- [x] **Additional Sync (Projects)**
+    - [x] **Fetch Projects**: Implement `fetchOpenProjectProjects` API.
+    - [x] **Settings UI**: Add "Sync Projects" capability.
+    - [ ] ~~**Proposal Context**: Allow linking a proposal to a specific OpenProject Project~~ (Cancelled).
+
+- [x] **UI/UX Refinement**
+    - [x] **Sync Status Dashboard**: Improve the Settings UI to show detailed sync stats (Total Users, Total Projects, Last Sync Time).
+    - [ ] **User Avatars**: Display OpenProject avatars where users are listed.
+
 ## Phase 4: Expansion & Role-Based Features
 Focus on separating user roles (Proposer vs Reviewer) and adding depth to the application.
 
@@ -56,15 +72,15 @@ Focus on separating user roles (Proposer vs Reviewer) and adding depth to the ap
         - [x] **Sidebar**: Hide "Evaluation", "Dept Review", "Settings" for regular users.
         - [x] **Dashboard**: Show different widgets based on role (e.g., "My Proposals" for User vs "Pending Reviews" for Reviewer).
 
-- [ ] **Proposal Detail View**
-    - [ ] Create `ProposalDetail.tsx` (read-only view for proposers).
-    - [ ] Show full history/timeline of the proposal.
+- [x] **Proposal Detail View**
+    - [x] Create `ProposalDetail.tsx` (read-only view for proposers).
+    - [x] Show full history/timeline of the proposal.
     - [ ] Add "Comments" section for feedback.
 
-- [ ] **Public Proposal List**
-    - [ ] Create `ProposalList.tsx` for browsing all public proposals.
-    - [ ] Add filter/sort options (by category, date, status).
-    - [ ] Add "Search" functionality.
+- [x] **Public Proposal List**
+    - [x] Create `ProposalList.tsx` for browsing all public proposals.
+    - [x] Add filter/sort options (by category, date, status).
+    - [x] Add "Search" functionality.
 
 - [ ] **My Page / Profile**
     - [ ] Create `Profile.tsx`.

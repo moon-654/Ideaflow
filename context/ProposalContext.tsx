@@ -30,6 +30,11 @@ interface SettingsState {
         gradeB: number;
         gradeC: number;
     };
+    openProject: {
+        apiUrl: string;
+        apiKey: string;
+        lastSync?: string;
+    };
     members: Array<{ id: number; name: string; dept: string; role: string }>;
 }
 
@@ -49,6 +54,8 @@ interface ProposalContextType {
     setCurrentUser: (user: User) => void;
     addUser: (user: User) => void;
     removeUser: (id: string) => void;
+    syncUsersFromOpenProject: () => Promise<void>;
+    syncProjectsFromOpenProject: () => Promise<void>;
     addDepartment: (dept: Department) => void;
     removeDepartment: (id: string) => void;
     addSystemLog: (log: SystemLog) => void;
@@ -105,6 +112,11 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 gradeB: 30,
                 gradeC: 10,
             },
+            openProject: {
+                apiUrl: 'http://192.168.0.200:8085/',
+                apiKey: '',
+                projects: [], // Initialize empty projects array
+            },
             members: [
                 { id: 1, name: '김철수 팀장', dept: '인사팀', role: '1차 심의위원' },
                 { id: 2, name: '박영희 상무', dept: '경영지원본부', role: '2차 심의위원' },
@@ -112,6 +124,38 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ]
         };
     });
+
+
+    // Migration: Fix Role and Department for existing sessions
+    useEffect(() => {
+        let updates: any = {};
+
+        // Fix Role
+        if (currentUser.role === '시스템 관리자') {
+            updates.role = 'Admin';
+        }
+
+        // Fix Department (legacy 'dept' property)
+        if (!currentUser.department && (currentUser as any).dept) {
+            updates.department = (currentUser as any).dept;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            setCurrentUser(prev => ({ ...prev, ...updates }));
+        }
+    }, [currentUser]);
+
+    // Migration: Move 'New' proposals to 'Dept_Review' if targetDepartment is set
+    useEffect(() => {
+        const hasNewProposals = proposals.some(p => p.status === 'New' && p.targetDepartment);
+        if (hasNewProposals) {
+            setProposals(prev => prev.map(p =>
+                (p.status === 'New' && p.targetDepartment)
+                    ? { ...p, status: 'Dept_Review' }
+                    : p
+            ));
+        }
+    }, [proposals]);
 
     // Persistence Effects
     useEffect(() => {
@@ -171,6 +215,123 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const addSystemLog = (log: SystemLog) => setSystemLogs(prev => [log, ...prev]);
 
+    const syncUsersFromOpenProject = async () => {
+        if (!settings.openProject.apiKey) {
+            throw new Error('API Key is missing');
+        }
+
+        try {
+            // Dynamically import to avoid circular dependency or context issues if needed
+            const { fetchOpenProjectUsers } = await import('../services/openProject');
+            const opUsers = await fetchOpenProjectUsers(settings.openProject.apiKey);
+
+            // Merge or Replace users? For now, we'll append unique ones or update existing by ID matches
+            // Ideally we might want a full sync. Let's filter out existing MOCK users if we want to replace, 
+            // but safer to just add/update.
+
+            setUsers(prev => {
+                const newUsers = [...prev];
+                opUsers.forEach(opUser => {
+                    const index = newUsers.findIndex(u => u.id === opUser.id);
+                    if (index >= 0) {
+                        newUsers[index] = { ...newUsers[index], ...opUser }; // Update existing
+                    } else {
+                        newUsers.push(opUser); // Add new
+                    }
+                });
+                return newUsers;
+            });
+
+            // Logic Enhancement: Sync Departments from Users
+            // Extract unique departments from the fetched users and add them to the departments list if missing
+            const uniqueDepts = Array.from(new Set(opUsers.map(u => u.department || '미지정').filter(d => d && d !== '미지정')));
+
+            setDepartments(prev => {
+                const newDepts = [...prev];
+                uniqueDepts.forEach(deptName => {
+                    if (!newDepts.some(d => d.name === deptName)) {
+                        newDepts.push({
+                            id: `dept-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            name: deptName,
+                            managerId: '' // Manager mapping logic can be added later
+                        });
+                    }
+                });
+                return newDepts;
+            });
+
+            setSettings(prev => ({
+                ...prev,
+                openProject: {
+                    ...prev.openProject,
+                    lastSync: new Date().toISOString()
+                }
+            }));
+
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'OpenProject Sync',
+                details: `Synced ${opUsers.length} users from OpenProject`,
+                level: 'Info'
+            });
+
+        } catch (error) {
+            console.error('Sync failed:', error);
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'OpenProject Sync Failed',
+                details: error instanceof Error ? error.message : 'Unknown error',
+                level: 'Error'
+            });
+            throw error;
+        }
+    };
+
+    const syncProjectsFromOpenProject = async () => {
+        if (!settings.openProject.apiKey) {
+            throw new Error('API Key is missing');
+        }
+
+        try {
+            const { fetchOpenProjectProjects } = await import('../services/openProject');
+            const opProjects = await fetchOpenProjectProjects(settings.openProject.apiKey);
+
+            setSettings(prev => ({
+                ...prev,
+                openProject: {
+                    ...prev.openProject,
+                    projects: opProjects, // Update projects list
+                    lastSync: new Date().toISOString()
+                }
+            }));
+
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'OpenProject Project Sync',
+                details: `Synced ${opProjects.length} projects from OpenProject`,
+                level: 'Info'
+            });
+
+        } catch (error) {
+            console.error('Project Sync failed:', error);
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'OpenProject Project Sync Failed',
+                details: error instanceof Error ? error.message : 'Unknown error',
+                level: 'Error'
+            });
+            throw error;
+        }
+    };
+
     return (
         <ProposalContext.Provider value={{
             proposals,
@@ -190,7 +351,9 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             removeUser,
             addDepartment,
             removeDepartment,
-            addSystemLog
+            addSystemLog,
+            syncUsersFromOpenProject,
+            syncProjectsFromOpenProject
         }}>
             {children}
         </ProposalContext.Provider>

@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
-import { Save, Bell, Users, Coins, ToggleLeft, ToggleRight, Plus, Trash2, Mail, Shield } from 'lucide-react';
+import { Save, Bell, Users, Coins, ToggleLeft, ToggleRight, Plus, Trash2, Mail, Shield, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Settings: React.FC = () => {
-  const { settings, updateSettings } = useProposalStore();
+  const { settings, updateSettings, syncUsersFromOpenProject, users } = useProposalStore();
+
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Local state for edits (initialized from store)
+  // No local state for simple settings, use store directly for inputs like API Key to avoid sync issues
+  // But for the bulk save pattern used here, we might want to keep it consistent.
+  // Ideally, refactor to direct store updates or full local state.
+  // Given the previous step added direct updateSettings calls for OpenProject, we leave this as is.
   const [notifications, setNotifications] = useState(settings.notifications);
   const [mileageRules, setMileageRules] = useState(settings.mileageRules);
   const [members, setMembers] = useState(settings.members);
 
-  // Sync local state when store changes (e.g. on mount or reset)
+  // Sync local state when store changes
   useEffect(() => {
     setNotifications(settings.notifications);
     setMileageRules(settings.mileageRules);
@@ -144,19 +151,167 @@ const Settings: React.FC = () => {
               <Mail size={12} /> 메일 템플릿 편집
             </button>
           </div>
+          <div className="p-4 bg-slate-50 border-t border-gray-100 text-center">
+            <button className="text-xs font-bold text-slate-500 flex items-center justify-center gap-1 hover:text-primary">
+              <Mail size={12} /> 메일 템플릿 편집
+            </button>
+          </div>
         </div>
 
-        {/* 3. Committee Management */}
+        {/* 3. OpenProject Integration */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-fit">
+          <div className="p-5 border-b border-gray-100 bg-slate-50 flex items-center gap-2">
+            <Users className="text-blue-600" size={20} />
+            <h3 className="font-bold text-slate-900">OpenProject 연동</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">API 서버 주소</label>
+              <input
+                type="text"
+                value={settings.openProject.apiUrl}
+                disabled
+                className="w-full px-3 py-2 border border-gray-300 rounded text-slate-500 bg-gray-100 cursor-not-allowed"
+              />
+              <p className="text-xs text-slate-400">서버 주소는 고정되어 있습니다.</p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">API Key</label>
+              <input
+                type="password"
+                placeholder="OpenProject API Key 입력"
+                value={settings.openProject.apiKey}
+                onChange={(e) => updateSettings({
+                  openProject: { ...settings.openProject, apiKey: e.target.value }
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-slate-900 focus:ring-primary focus:border-primary"
+              />
+            </div>
+
+            <div className="pt-2">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-slate-500">
+                  마지막 동기화: {settings.openProject.lastSync ? new Date(settings.openProject.lastSync).toLocaleString() : '없음'}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  // const { syncUsersFromOpenProject } = useProposalStore.getState(); // Removed incorrect usage
+                  try {
+                    toast.loading('OpenProject 사용자 동기화 중...');
+                    await syncUsersFromOpenProject();
+                    toast.dismiss();
+                    toast.success('사용자 동기화가 완료되었습니다.');
+                  } catch (e) {
+                    toast.dismiss();
+                    toast.error('동기화 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+                  }
+                }}
+                className="w-full py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Users size={16} /> 사용자 정보 동기화
+              </button>
+
+              <div className="border-t border-gray-100 my-4 pt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-slate-500 font-bold uppercase">프로젝트 동기화</span>
+                  <span className="text-xs text-slate-500">
+                    {settings.openProject.projects?.length || 0}개 프로젝트
+                  </span>
+                </div>
+                <button
+                  onClick={async () => {
+                    const { syncProjectsFromOpenProject } = useProposalStore.getState();
+                    try {
+                      toast.loading('OpenProject 프로젝트 동기화 중...');
+                      await syncProjectsFromOpenProject();
+                      toast.dismiss();
+                      toast.success('프로젝트 동기화가 완료되었습니다.');
+                    } catch (e) {
+                      toast.dismiss();
+                      toast.error('동기화 실패: ' + (e instanceof Error ? e.message : '알 수 없는 오류'));
+                    }
+                  }}
+                  className="w-full py-2 bg-purple-600 text-white font-bold rounded hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Users size={16} /> 프로젝트 목록 동기화
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-gray-100 bg-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="text-purple-600" size={20} />
               <h3 className="font-bold text-slate-900">심의 위원 관리</h3>
             </div>
-            <button className="text-xs font-bold flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 rounded hover:bg-slate-50 transition-colors">
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              className="text-xs font-bold flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-300 rounded hover:bg-slate-50 transition-colors"
+            >
               <Plus size={14} /> 위원 추가
             </button>
           </div>
+
+          {/* User Search/Selection Area (Conditionally Rendered or Modal) */}
+          {isSearchModalOpen && (
+            <div className="p-4 bg-slate-50 border-b border-gray-200 animate-slide-in-down">
+              <div className="flex gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="사용자 검색 (이름)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary/50"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={() => setIsSearchModalOpen(false)}
+                  className="px-3 py-2 text-slate-500 hover:text-slate-700 font-bold text-sm"
+                >
+                  취소
+                </button>
+              </div>
+
+              {/* Search Results */}
+              <div className="max-h-48 overflow-y-auto bg-white rounded border border-gray-200 shadow-sm">
+                {users
+                  .filter(u => u.name.includes(searchQuery))
+                  .slice(0, 100) // Limit results
+                  .map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => {
+                        const newMember = {
+                          id: Date.now(), // better ID generation needed ideally
+                          name: user.name,
+                          dept: user.department || '미지정',
+                          role: '1차 심의위원' // Default role
+                        };
+                        setMembers(prev => [...prev, newMember]);
+                        setIsSearchModalOpen(false);
+                        setSearchQuery('');
+                        toast.success(`${user.name}님이 위원으로 추가되었습니다.`);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-purple-50 flex items-center justify-between border-b border-gray-50 last:border-none"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900">{user.name}</span>
+                        <span className="text-xs text-slate-500 ml-2">{user.email}</span>
+                      </div>
+                      <span className="text-xs font-medium text-slate-400">{user.department}</span>
+                    </button>
+                  ))}
+                {users.filter(u => u.name.includes(searchQuery)).length === 0 && (
+                  <div className="p-3 text-center text-slate-400 text-sm">검색 결과가 없습니다.</div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="p-0 overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-gray-200">

@@ -14,7 +14,7 @@ const STATUS_STEPS = [
 const ProposalDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { proposals } = useProposalStore();
+    const { proposals, currentUser } = useProposalStore();
 
     const proposal = proposals.find(p => p.id === id);
 
@@ -35,6 +35,8 @@ const ProposalDetail: React.FC = () => {
 
     const currentStepIndex = STATUS_STEPS.findIndex(s => s.id === proposal.status);
     const isRejected = proposal.status === 'Rejected';
+    const isModificationRequested = proposal.status === 'Modification_Requested';
+    const isMyProposal = proposal.proposer.id === currentUser.id;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-10">
@@ -101,6 +103,26 @@ const ProposalDetail: React.FC = () => {
                             <p className="font-bold text-sm">반려됨</p>
                             <p className="text-sm mt-1">이 제안은 심사 과정에서 반려되었습니다.</p>
                         </div>
+                    </div>
+                )}
+
+                {isModificationRequested && (
+                    <div className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-start gap-3 text-orange-700">
+                            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <p className="font-bold text-sm">수정 요청됨</p>
+                                <p className="text-sm mt-1">{proposal.deptReviewComment || '수정이 필요합니다.'}</p>
+                            </div>
+                        </div>
+                        {isMyProposal && (
+                            <button
+                                onClick={() => navigate(`/proposals/${encodeURIComponent(proposal.id)}/edit`)}
+                                className="mt-4 w-full px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors"
+                            >
+                                수정 후 재상정하기
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

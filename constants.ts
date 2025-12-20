@@ -3,7 +3,7 @@ import { User, Proposal, MileageLog } from './types';
 export const CURRENT_USER: User = {
   id: 'u1',
   name: '김관리',
-  role: '시스템 관리자',
+  role: 'Admin',
   department: '혁신지원팀',
   avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBY2w23osiy74Bvxm40smWFOfYd33KbkjllxwhxMaw9IrxqBBEZBzPBLpvzrZRSPwuN2I-Q_EzJQX75ACYzC_MZartWpcPpepkDA24wNH7gE4l4OqJ6C5VOKI31qSYXqsoWIarcw_wfKMv_ay-1jlMBJRs1Chv0oJ3GPxHV_8ChMwgwhnjwZb-iwUfFj3cEREowcsTxKds2ZCXQaKiE6G2RB0o1c-kjzXlP-9Cl6fJo4nYUoyCieU19CCAzCgyrzFsGmFwOE7-jyvC6'
 };

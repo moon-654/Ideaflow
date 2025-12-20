@@ -7,16 +7,17 @@ import { toast } from 'sonner';
 
 const ProposalSubmit: React.FC = () => {
   const navigate = useNavigate();
-  const { addProposal, currentUser } = useProposalStore();
+  const { addProposal, currentUser, departments } = useProposalStore();
 
   const [category, setCategory] = useState('');
   const [title, setTitle] = useState('');
+  const [targetDepartment, setTargetDepartment] = useState('');
   const [currentProblem, setCurrentProblem] = useState('');
   const [improvementPlan, setImprovementPlan] = useState('');
   const [expectedEffect, setExpectedEffect] = useState('');
 
   const handleSubmit = () => {
-    if (!category || !title || !currentProblem || !improvementPlan || !expectedEffect) {
+    if (!category || !title || !targetDepartment || !currentProblem || !improvementPlan || !expectedEffect) {
       toast.error('모든 필수 항목을 입력해주세요.');
       return;
     }
@@ -27,9 +28,12 @@ const ProposalSubmit: React.FC = () => {
       summary: currentProblem, // Using problem as summary for now
       proposer: currentUser,
       date: new Date().toISOString().split('T')[0],
-      status: 'New',
+      status: 'Dept_Review',
       category: category as any,
-      targetDepartment: '미지정', // Logic to assign dept could be added later
+      targetDepartment: targetDepartment,
+      currentProblem,
+      improvementPlan,
+      expectedEffect,
     };
 
     addProposal(newProposal);
@@ -91,6 +95,25 @@ const ProposalSubmit: React.FC = () => {
                 placeholder="명확하고 간결한 제목 (최대 50자)"
                 className="w-full h-11 px-4 rounded-lg border border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
+            </div>
+
+            <div className="md:col-span-3 space-y-2">
+              <label className="block text-sm font-bold text-slate-900">
+                실행(검토) 부서 <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={targetDepartment}
+                  onChange={(e) => setTargetDepartment(e.target.value)}
+                  className="w-full h-11 pl-4 pr-10 rounded-lg border border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none transition-all cursor-pointer"
+                >
+                  <option value="" disabled>실행 부서를 선택하세요</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.name}>{dept.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+              </div>
             </div>
           </div>
 

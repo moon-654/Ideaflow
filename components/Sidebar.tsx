@@ -27,6 +27,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, isMobileOpen, setIsMobileO
 
   const filteredItems = menuItems.filter(item => item.roles.includes(currentUser.role || 'User'));
 
+  console.log('Sidebar Debug:', {
+    role: currentUser.role,
+    name: currentUser.name,
+    totalItems: menuItems.length,
+    visibleItems: filteredItems.length
+  });
+
   const handleNavigation = (path: string) => {
     navigate(path);
     setIsMobileOpen(false);

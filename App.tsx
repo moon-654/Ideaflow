@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Evaluation from './pages/Evaluation';
 import ProposalSubmit from './pages/ProposalSubmit';
 import ProposalDetail from './pages/ProposalDetail';
+import ProposalEdit from './pages/ProposalEdit';
 import ProposalList from './pages/ProposalList';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
@@ -27,6 +28,7 @@ const App: React.FC = () => {
             <Route path="proposals" element={<ProposalSubmit />} />
             <Route path="public-proposals" element={<ProposalList />} />
             <Route path="proposals/:id" element={<ProposalDetail />} />
+            <Route path="proposals/:id/edit" element={<ProposalEdit />} />
             <Route path="profile" element={<Profile />} />
             <Route path="admin" element={<Admin />} />
             <Route path="dept_review" element={<DeptReview />} />

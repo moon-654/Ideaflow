@@ -18,7 +18,7 @@ const Login: React.FC = () => {
             setCurrentUser({
                 id: 'u1',
                 name: '김철수',
-                dept: '생산관리팀',
+                department: '생산관리팀',
                 role: 'User',
                 email: 'user@example.com'
             });
@@ -28,7 +28,7 @@ const Login: React.FC = () => {
             setCurrentUser({
                 id: 'u2',
                 name: '이영희',
-                dept: '품질관리팀',
+                department: '품질관리팀',
                 role: 'Reviewer',
                 email: 'reviewer@example.com'
             });
@@ -38,7 +38,7 @@ const Login: React.FC = () => {
             setCurrentUser({
                 id: 'u3',
                 name: '박관리',
-                dept: '인사팀',
+                department: '인사팀',
                 role: 'Admin',
                 email: 'admin@example.com'
             });
