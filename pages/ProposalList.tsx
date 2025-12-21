@@ -2,9 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
 import { Search, Filter, Calendar, User, Tag, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { stripHtml } from '../utils/html';
 
 const ProposalList: React.FC = () => {
-    const { proposals } = useProposalStore();
+    const { proposals, settings } = useProposalStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [categoryFilter, setCategoryFilter] = useState('All');
@@ -28,7 +29,7 @@ const ProposalList: React.FC = () => {
         'Rejected': '반려됨'
     };
 
-    const CATEGORIES = ['Process', 'Cost', 'Safety', 'Welfare', 'IT', 'Marketing'];
+
 
     return (
         <div className="space-y-6 animate-fade-in pb-10">
@@ -73,8 +74,8 @@ const ProposalList: React.FC = () => {
                             onChange={(e) => setCategoryFilter(e.target.value)}
                         >
                             <option value="All">모든 카테고리</option>
-                            {CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
+                            {(settings.categories || []).map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
                             ))}
                         </select>
                     </div>
@@ -114,7 +115,7 @@ const ProposalList: React.FC = () => {
                             </h3>
 
                             <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">
-                                {proposal.summary}
+                                {stripHtml(proposal.summary)}
                             </p>
 
                             <div className="pt-4 border-t border-gray-50 flex items-center justify-between mt-auto">

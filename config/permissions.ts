@@ -3,7 +3,7 @@
  * Defines what each role can access in the IdeaFlow system
  */
 
-export type Role = 'User' | 'Reviewer' | 'Admin';
+export type Role = 'User' | 'Reviewer' | 'Admin' | '1차 심의위원' | '2차 심의위원';
 
 export interface Permission {
     // Dashboard & General
@@ -62,6 +62,36 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
         viewSystemLogs: false,
         assignRoles: false,
     },
+    '1차 심의위원': {
+        viewDashboard: true,
+        viewAllProposals: true,
+        submitProposal: true,
+        editOwnProposal: true,
+        deleteOwnProposal: false,
+        deptReview: false, // Override by canDeptReview
+        firstReview: true, // Access to Evaluation page
+        secondReview: false,
+        manageUsers: false,
+        manageDepartments: false,
+        manageSettings: false,
+        viewSystemLogs: false,
+        assignRoles: false,
+    },
+    '2차 심의위원': {
+        viewDashboard: true,
+        viewAllProposals: true,
+        submitProposal: true,
+        editOwnProposal: true,
+        deleteOwnProposal: false,
+        deptReview: false, // Override by canDeptReview
+        firstReview: true, // Access to Evaluation page (Routing requires firstReview per App.tsx, logic handles tabs)
+        secondReview: true,
+        manageUsers: false,
+        manageDepartments: false,
+        manageSettings: false,
+        viewSystemLogs: false,
+        assignRoles: false,
+    },
     Admin: {
         viewDashboard: true,
         viewAllProposals: true,
@@ -83,8 +113,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
  * Get permissions for a given role
  */
 export const getPermissions = (role: string): Permission => {
-    const normalizedRole = role as Role;
-    return ROLE_PERMISSIONS[normalizedRole] || ROLE_PERMISSIONS.User;
+    // Check if role exists in mapping, otherwise default to User
+    if (Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, role)) {
+        return ROLE_PERMISSIONS[role as Role];
+    }
+    return ROLE_PERMISSIONS.User;
 };
 
 /**
@@ -98,13 +131,15 @@ export const hasPermission = (role: string, permission: keyof Permission): boole
 /**
  * Available roles for assignment
  */
-export const AVAILABLE_ROLES: Role[] = ['User', 'Reviewer', 'Admin'];
+export const AVAILABLE_ROLES: Role[] = ['User', 'Reviewer', 'Admin', '1차 심의위원', '2차 심의위원'];
 
 /**
- * Role display names (Korean)
+ * Role display names
  */
 export const ROLE_DISPLAY_NAMES: Record<Role, string> = {
     User: '일반 사용자',
     Reviewer: '심사위원',
     Admin: '관리자',
+    '1차 심의위원': '1차 심의위원',
+    '2차 심의위원': '2차 심의위원',
 };

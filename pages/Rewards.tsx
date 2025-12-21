@@ -12,17 +12,32 @@ const TYPE_MAP: Record<string, string> = {
 };
 
 const Rewards: React.FC = () => {
-  const { mileageLogs, updateMileageLog } = useProposalStore();
+  const { mileageLogs, updateMileageLog, currentUser } = useProposalStore();
 
-  const pendingPoints = mileageLogs.filter(l => l.status === 'Accrued').reduce((acc, curr) => acc + curr.points, 0);
-  const totalPaid = mileageLogs.filter(l => l.status === 'Paid').reduce((acc, curr) => acc + curr.points, 0);
+  const isAdmin = currentUser.role === 'Admin';
+
+  // Filter logs: Admin sees all, User sees only their own
+  const relevantLogs = isAdmin
+    ? mileageLogs
+    : mileageLogs.filter(l => l.userId === currentUser.id);
+
+  const pendingPoints = relevantLogs.filter(l => l.status === 'Accrued').reduce((acc, curr) => acc + curr.points, 0);
+  const totalPaid = relevantLogs.filter(l => l.status === 'Paid').reduce((acc, curr) => acc + curr.points, 0);
 
   const processPayout = () => {
+    if (!isAdmin) return;
     if (pendingPoints === 0) return;
     const confirm = window.confirm(`${pendingPoints} 포인트를 일괄 지급 처리하시겠습니까? \n모든 적립 상태가 '지급 완료'로 변경됩니다.`);
     if (confirm) {
       // Update all accrued logs to paid
-      mileageLogs.forEach(log => {
+      // Note: Admin pays out ALL pending logs, effectively. 
+      // If we filtered relevantLogs, processPayout should technically pay out what is shown? 
+      // But Payout is usually a global batch job. 
+      // If Admin filters view (future feature), specific payout might be needed.
+      // For now, let's keep it simple: Admin pays ALL logs (global). 
+      // But wait, if I use 'relevantLogs' for calculation, I should stick to that scope.
+      // Since isAdmin is true, relevantLogs IS global logs. So logic holds.
+      relevantLogs.forEach(log => {
         if (log.status === 'Accrued') {
           updateMileageLog(log.id, { status: 'Paid' });
         }
@@ -36,7 +51,9 @@ const Rewards: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">포상 및 마일리지</h1>
-          <p className="text-slate-500 mt-1">제안 활동 포인트 현황 조회 및 지급 처리.</p>
+          <p className="text-slate-500 mt-1">
+            {isAdmin ? '전체 제안 활동 포인트 현황 조회 및 지급 처리.' : '나의 제안 활동 포인트 적립 내역입니다.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-slate-50">
@@ -46,7 +63,7 @@ const Rewards: React.FC = () => {
       </div>
 
       {/* Mileage Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
         <div className="bg-gradient-to-br from-primary to-blue-600 p-6 rounded-xl shadow-lg text-white relative overflow-hidden">
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2 opacity-90">
@@ -63,16 +80,18 @@ const Rewards: React.FC = () => {
           <div className="text-3xl font-bold text-slate-900">{totalPaid.toLocaleString()} <span className="text-sm font-normal text-slate-400">점</span></div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
-          <div className="text-sm font-medium text-slate-500 mb-3">관리자 작업</div>
-          <button
-            onClick={processPayout}
-            disabled={pendingPoints === 0}
-            className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <Send size={16} /> 일괄 지급 처리
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
+            <div className="text-sm font-medium text-slate-500 mb-3">관리자 작업</div>
+            <button
+              onClick={processPayout}
+              disabled={pendingPoints === 0}
+              className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <Send size={16} /> 일괄 지급 처리
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Point Table */}
@@ -95,7 +114,7 @@ const Rewards: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {mileageLogs.map((log) => (
+              {relevantLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                   <td className="p-4 text-slate-500 whitespace-nowrap">{log.date}</td>
                   <td className="p-4">

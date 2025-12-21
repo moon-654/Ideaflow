@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProposalStore } from '../context/ProposalContext';
-import { ArrowLeft, Calendar, User, Tag, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Tag, CheckCircle, Clock, AlertCircle, FileText, MessageCircle, Send, Trash2, DollarSign } from 'lucide-react';
+import { toast } from 'sonner';
+import DOMPurify from 'dompurify';
 
 const STATUS_STEPS = [
     { id: 'New', label: '신규 등록' },
@@ -14,7 +16,8 @@ const STATUS_STEPS = [
 const ProposalDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { proposals, currentUser } = useProposalStore();
+    const { proposals, currentUser, addComment, deleteComment } = useProposalStore();
+    const [newComment, setNewComment] = useState('');
 
     const proposal = proposals.find(p => p.id === id);
 
@@ -37,6 +40,34 @@ const ProposalDetail: React.FC = () => {
     const isRejected = proposal.status === 'Rejected';
     const isModificationRequested = proposal.status === 'Modification_Requested';
     const isMyProposal = proposal.proposer.id === currentUser.id;
+
+    const handleAddComment = () => {
+        if (!newComment.trim()) {
+            toast.error('코멘트 내용을 입력해주세요.');
+            return;
+        }
+        addComment(proposal.id, newComment.trim());
+        setNewComment('');
+        toast.success('코멘트가 등록되었습니다.');
+    };
+
+    const handleDeleteComment = (commentId: string) => {
+        if (window.confirm('이 코멘트를 삭제하시겠습니까?')) {
+            deleteComment(proposal.id, commentId);
+            toast.success('코멘트가 삭제되었습니다.');
+        }
+    };
+
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-10">
@@ -136,25 +167,40 @@ const ProposalDetail: React.FC = () => {
                             <FileText size={20} className="text-slate-400" />
                             제안 내용
                         </h3>
-                        <div className="prose prose-slate max-w-none">
-                            <div className="mb-6">
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">현황 및 문제점</label>
-                                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
-                                    {proposal.currentProblem || "내용이 없습니다."}
-                                </p>
-                            </div>
-                            <div className="mb-6">
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">개선 방안</label>
-                                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
-                                    {proposal.improvementPlan || "내용이 없습니다."}
-                                </p>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">현황 및 문제점</label>
+                                <div
+                                    className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(proposal.currentProblem || '<p class="text-slate-400">내용이 없습니다.</p>') }}
+                                />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">기대 효과</label>
-                                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
-                                    {proposal.expectedEffect || "내용이 없습니다."}
-                                </p>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">개선 방안</label>
+                                <div
+                                    className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(proposal.improvementPlan || '<p class="text-slate-400">내용이 없습니다.</p>') }}
+                                />
                             </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">기대 효과</label>
+                                <div
+                                    className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(proposal.expectedEffect || '<p class="text-slate-400">내용이 없습니다.</p>') }}
+                                />
+                            </div>
+                            {proposal.expectedAmount && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">예상 효과 금액</label>
+                                    <div className="flex items-center gap-2 bg-green-50 p-4 rounded-lg border border-green-100">
+                                        <DollarSign size={20} className="text-green-600" />
+                                        <span className="text-xl font-bold text-green-700">
+                                            {proposal.expectedAmount.toLocaleString('ko-KR')}
+                                        </span>
+                                        <span className="text-green-600">원 / 연</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -167,6 +213,81 @@ const ProposalDetail: React.FC = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* Comments Section */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            <MessageCircle size={20} className="text-slate-400" />
+                            코멘트
+                            {proposal.comments && proposal.comments.length > 0 && (
+                                <span className="text-sm font-normal text-slate-400">({proposal.comments.length})</span>
+                            )}
+                        </h3>
+
+                        {/* Comment Input */}
+                        <div className="flex gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                <User size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <textarea
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="의견이나 질문을 남겨주세요..."
+                                    className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+                                    rows={3}
+                                />
+                                <div className="flex justify-end mt-2">
+                                    <button
+                                        onClick={handleAddComment}
+                                        disabled={!newComment.trim()}
+                                        className="flex items-center gap-2 px-4 py-2 bg-primary text-white font-medium rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        <Send size={16} />
+                                        등록
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Comments List */}
+                        <div className="space-y-4">
+                            {(!proposal.comments || proposal.comments.length === 0) ? (
+                                <p className="text-center text-slate-400 py-8">
+                                    아직 코멘트가 없습니다. 첫 코멘트를 남겨보세요!
+                                </p>
+                            ) : (
+                                proposal.comments.map(comment => (
+                                    <div key={comment.id} className="flex gap-3 p-4 bg-slate-50 rounded-lg border border-slate-100">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 shrink-0">
+                                            <User size={18} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-slate-900">{comment.author.name}</span>
+                                                    <span className="text-xs text-slate-400">{comment.author.department}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-slate-400">{formatDate(comment.createdAt)}</span>
+                                                    {(comment.author.id === currentUser.id || currentUser.role === 'Admin') && (
+                                                        <button
+                                                            onClick={() => handleDeleteComment(comment.id)}
+                                                            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                                            title="삭제"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <p className="text-slate-700 mt-1 whitespace-pre-wrap">{comment.content}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Sidebar Info */}
@@ -242,3 +363,4 @@ const ProposalDetail: React.FC = () => {
 };
 
 export default ProposalDetail;
+

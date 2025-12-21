@@ -76,6 +76,9 @@ export const fetchOpenProjectUsers = async (apiKey: string): Promise<User[]> => 
 
             // Map OpenProject users to our User type
             // User Convention: lastName = Team Name, firstName = Full Name
+            if (opUsers.length > 0) {
+                console.log('[OpenProject Sync] First User Sample:', opUsers[0]);
+            }
             const mappedUsers = opUsers.map(opUser => ({
                 id: opUser.id.toString(),
                 name: opUser.firstName || 'Unknown',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 import Dashboard from './pages/Dashboard';
 import Evaluation from './pages/Evaluation';
 import ProposalSubmit from './pages/ProposalSubmit';
@@ -12,6 +13,7 @@ import Admin from './pages/Admin';
 import Rewards from './pages/Rewards';
 import DeptReview from './pages/DeptReview';
 import Settings from './pages/Settings';
+import Report from './pages/Report';
 import Login from './pages/Login';
 import { ProposalProvider } from './context/ProposalContext';
 import { Toaster } from 'sonner';
@@ -30,11 +32,38 @@ const App: React.FC = () => {
             <Route path="proposals/:id" element={<ProposalDetail />} />
             <Route path="proposals/:id/edit" element={<ProposalEdit />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="admin" element={<Admin />} />
-            <Route path="dept_review" element={<DeptReview />} />
-            <Route path="evaluation" element={<Evaluation />} />
-            <Route path="rewards" element={<Rewards />} />
-            <Route path="settings" element={<Settings />} />
+            {/* Protected Routes - Reviewer/Admin only */}
+            <Route path="dept_review" element={
+              <ProtectedRoute requiredPermission="deptReview">
+                <DeptReview />
+              </ProtectedRoute>
+            } />
+            <Route path="evaluation" element={
+              <ProtectedRoute requiredPermission="firstReview">
+                <Evaluation />
+              </ProtectedRoute>
+            } />
+            {/* Protected Routes - Admin only */}
+            <Route path="admin" element={
+              <ProtectedRoute requiredPermission="manageUsers">
+                <Admin />
+              </ProtectedRoute>
+            } />
+            <Route path="rewards" element={
+              <ProtectedRoute requiredPermission="viewDashboard">
+                <Rewards />
+              </ProtectedRoute>
+            } />
+            <Route path="settings" element={
+              <ProtectedRoute requiredPermission="manageSettings">
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="report" element={
+              <ProtectedRoute allowedRoles={['Admin', 'Reviewer', '1차 심의위원', '2차 심의위원']}>
+                <Report />
+              </ProtectedRoute>
+            } />
           </Route>
         </Routes>
       </Router>
@@ -44,3 +73,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

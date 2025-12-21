@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { UploadCloud, Bold, Italic, List, ListOrdered, ChevronDown } from 'lucide-react';
+import { UploadCloud, ChevronDown, DollarSign } from 'lucide-react';
 import { useProposalStore } from '../context/ProposalContext';
 import { useNavigate } from 'react-router-dom';
 import { Proposal } from '../types';
 import { toast } from 'sonner';
+import RichTextEditor from '../components/RichTextEditor';
+import { stripHtml } from '../utils/html';
 
 const ProposalSubmit: React.FC = () => {
   const navigate = useNavigate();
-  const { addProposal, currentUser, departments } = useProposalStore();
+  const { addProposal, currentUser, departments, settings } = useProposalStore();
 
   const [category, setCategory] = useState('');
   const [title, setTitle] = useState('');
@@ -15,17 +17,40 @@ const ProposalSubmit: React.FC = () => {
   const [currentProblem, setCurrentProblem] = useState('');
   const [improvementPlan, setImprovementPlan] = useState('');
   const [expectedEffect, setExpectedEffect] = useState('');
+  const [expectedAmount, setExpectedAmount] = useState<string>('');
+
+  // Format number with commas
+  const formatAmount = (value: string) => {
+    const numericValue = value.replace(/[^\d]/g, '');
+    if (!numericValue) return '';
+    return parseInt(numericValue, 10).toLocaleString('ko-KR');
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatAmount(e.target.value);
+    setExpectedAmount(formatted);
+  };
+
+  const parseAmount = (formatted: string): number | undefined => {
+    if (!formatted) return undefined;
+    return parseInt(formatted.replace(/,/g, ''), 10);
+  };
 
   const handleSubmit = () => {
-    if (!category || !title || !targetDepartment || !currentProblem || !improvementPlan || !expectedEffect) {
+    // Check if editors have content (strip HTML to check for actual text)
+    const hasProblem = stripHtml(currentProblem).length > 0;
+    const hasPlan = stripHtml(improvementPlan).length > 0;
+    const hasEffect = stripHtml(expectedEffect).length > 0;
+
+    if (!category || !title || !targetDepartment || !hasProblem || !hasPlan || !hasEffect) {
       toast.error('모든 필수 항목을 입력해주세요.');
       return;
     }
 
     const newProposal: Proposal = {
-      id: `#23-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`, // Simple ID generation
+      id: `#23-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
       title,
-      summary: currentProblem, // Using problem as summary for now
+      summary: stripHtml(currentProblem).substring(0, 200), // Plain text summary for lists
       proposer: currentUser,
       date: new Date().toISOString().split('T')[0],
       status: 'Dept_Review',
@@ -34,6 +59,7 @@ const ProposalSubmit: React.FC = () => {
       currentProblem,
       improvementPlan,
       expectedEffect,
+      expectedAmount: parseAmount(expectedAmount),
     };
 
     addProposal(newProposal);
@@ -73,12 +99,9 @@ const ProposalSubmit: React.FC = () => {
                   className="w-full h-11 pl-4 pr-10 rounded-lg border border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none transition-all cursor-pointer"
                 >
                   <option value="" disabled>카테고리 선택</option>
-                  <option value="Process">프로세스 개선</option>
-                  <option value="Cost">원가 절감</option>
-                  <option value="Safety">안전/환경</option>
-                  <option value="Welfare">복리후생</option>
-                  <option value="IT">IT/시스템</option>
-                  <option value="Marketing">마케팅</option>
+                  {(settings.categories || []).map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
               </div>
@@ -119,7 +142,7 @@ const ProposalSubmit: React.FC = () => {
 
           <hr className="border-gray-100" />
 
-          {/* Editors */}
+          {/* Rich Text Editors */}
           <div className="space-y-2">
             <div className="flex justify-between items-end">
               <label className="block text-sm font-bold text-slate-900">
@@ -127,14 +150,12 @@ const ProposalSubmit: React.FC = () => {
               </label>
               <span className="text-xs text-slate-400">현재의 문제점이나 제안 배경을 기술하세요.</span>
             </div>
-            <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-              <textarea
-                value={currentProblem}
-                onChange={(e) => setCurrentProblem(e.target.value)}
-                className="w-full p-4 border-none focus:ring-0 resize-y min-h-[120px] placeholder:text-slate-300 bg-white text-slate-900"
-                placeholder="내용을 입력하세요..."
-              ></textarea>
-            </div>
+            <RichTextEditor
+              value={currentProblem}
+              onChange={setCurrentProblem}
+              placeholder="현황 및 문제점을 입력하세요..."
+              minHeight="120px"
+            />
           </div>
 
           <div className="space-y-2">
@@ -144,14 +165,12 @@ const ProposalSubmit: React.FC = () => {
               </label>
               <span className="text-xs text-slate-400">구체적인 해결 방안을 기술하세요.</span>
             </div>
-            <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-              <textarea
-                value={improvementPlan}
-                onChange={(e) => setImprovementPlan(e.target.value)}
-                className="w-full p-4 border-none focus:ring-0 resize-y min-h-[200px] placeholder:text-slate-300 bg-white text-slate-900"
-                placeholder="내용을 입력하세요..."
-              ></textarea>
-            </div>
+            <RichTextEditor
+              value={improvementPlan}
+              onChange={setImprovementPlan}
+              placeholder="개선 방안을 입력하세요..."
+              minHeight="200px"
+            />
           </div>
 
           <div className="space-y-2">
@@ -161,13 +180,36 @@ const ProposalSubmit: React.FC = () => {
               </label>
               <span className="text-xs text-slate-400">정량적(비용) 또는 정성적 효과를 기술하세요.</span>
             </div>
-            <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-              <textarea
-                value={expectedEffect}
-                onChange={(e) => setExpectedEffect(e.target.value)}
-                className="w-full p-4 border-none focus:ring-0 resize-y min-h-[120px] placeholder:text-slate-300 bg-white text-slate-900"
-                placeholder="내용을 입력하세요..."
-              ></textarea>
+            <RichTextEditor
+              value={expectedEffect}
+              onChange={setExpectedEffect}
+              placeholder="기대 효과를 입력하세요..."
+              minHeight="120px"
+            />
+          </div>
+
+          {/* Expected Amount */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-end">
+              <label className="block text-sm font-bold text-slate-900">
+                예상 효과 금액
+              </label>
+              <span className="text-xs text-slate-400">연간 절감/수익 효과 (선택)</span>
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  value={expectedAmount}
+                  onChange={handleAmountChange}
+                  placeholder="50,000,000"
+                  className="w-full h-11 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-right"
+                />
+              </div>
+              <span className="flex items-center px-4 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg border border-gray-300">
+                원
+              </span>
             </div>
           </div>
 

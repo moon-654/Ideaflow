@@ -7,6 +7,34 @@ export interface User {
   avatarUrl: string;
   department: string;
   email?: string;
+  canDeptReview?: boolean;
+  emailPreferences?: {
+    instant: boolean;
+    daily: boolean;
+  };
+}
+
+// Category for proposals
+export interface Category {
+  id: string;
+  name: string;
+  color: string; // tailwind color name like 'blue', 'green', etc.
+}
+
+// Evaluation criteria for 1st review
+export interface EvaluationCriteria {
+  id: string;
+  name: string;
+  maxPoints: number;
+  description?: string;
+}
+
+// Grade for 2nd review
+export interface Grade {
+  id: string;
+  name: string;
+  mileagePoints: number;
+  color: string;
 }
 
 export type ProposalStatus =
@@ -25,8 +53,8 @@ export interface Proposal {
   proposer: User;
   date: string;
   status: ProposalStatus;
-  category: 'Process' | 'Cost' | 'Safety' | 'Welfare' | 'IT' | 'Marketing';
-  targetDepartment: string; // The department executing/reviewing
+  category: string; // Changed to string to support dynamic categories
+  targetDepartment: string;
 
   // Content Details
   currentProblem?: string;
@@ -36,15 +64,30 @@ export interface Proposal {
   // Evaluation Data
   deptReviewComment?: string;
   score1st?: {
-    necessity: number; // e.g., 40pts
-    feasibility: number; // e.g., 60pts
+    [criteriaId: string]: number; // Dynamic criteria scores
+  } & {
     total: number;
     passed: boolean;
   };
-  grade2nd?: 'S' | 'A' | 'B' | 'C';
+  grade2nd?: string; // Changed to string to support dynamic grades
+  rejectReason?: string;
 
   // Mileage
   mileageAccrued?: number;
+
+  // Comments
+  comments?: Comment[];
+
+  // Expected monetary effect
+  expectedAmount?: number;
+}
+
+export interface Comment {
+  id: string;
+  proposalId: string;
+  author: User;
+  content: string;
+  createdAt: string;
 }
 
 export interface MileageLog {
@@ -57,7 +100,7 @@ export interface MileageLog {
   type: 'Registration' | 'Dept_Pass' | 'Grade_S' | 'Grade_A' | 'Grade_B' | 'Grade_C';
   points: number;
   date: string;
-  status: 'Accrued' | 'Paid'; // Accrued = waiting, Paid = done
+  status: 'Accrued' | 'Paid';
 }
 
 export interface StatCardProps {
@@ -92,7 +135,28 @@ export interface Project {
   status: string;
 }
 
+export interface EmailConfig {
+  deliveryMethod: 'smtp' | 'sendmail';
+  smtpServer: string;
+  smtpPort: string;
+  smtpHeloDomain: string;
+  smtpAuth: 'none' | 'plain' | 'login' | 'cram-md5';
+  smtpUsername: string;
+  smtpPassword?: string;
+  enableStartTls: boolean;
+  enableSsl: boolean;
+}
+
+export interface EmailTemplate {
+  id: string; // 'newProposal', 'deptReview', 'reject', 'finalGrade'
+  name: string; // Display name
+  subject: string;
+  body: string;
+}
+
 export interface SettingsState {
+  emailConfig: EmailConfig;
+  emailTemplates: EmailTemplate[];
   notifications: {
     newProposal: boolean;
     deptReview: boolean;
@@ -107,11 +171,16 @@ export interface SettingsState {
     gradeB: number;
     gradeC: number;
   };
-  members: User[];
+
   openProject: {
     apiUrl: string;
     apiKey: string;
     lastSync: string | null;
-    projects: Project[]; // Added synced projects
+    projects: Project[];
   };
+  // New configurable settings
+  categories: Category[];
+  evaluationCriteria: EvaluationCriteria[];
+  evaluationCutoff: number; // Minimum score to pass 1st review
+  grades: Grade[];
 }

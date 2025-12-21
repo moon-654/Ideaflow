@@ -50,16 +50,16 @@ Leverage the established connection to enrich the application data.
 
 - [x] **Data Utilization**
     - [x] **Committee Management**: Replace manual input with **Search & Select** from synced OpenProject users in `Settings.tsx`.
-    - [ ] **Proposal Submission**: Display "Department" automatically based on logged-in user (mapped from OP).
+    - [x] **Proposal Submission**: Display "Department" automatically based on logged-in user (mapped from OP).
 
 - [x] **Additional Sync (Projects)**
     - [x] **Fetch Projects**: Implement `fetchOpenProjectProjects` API.
     - [x] **Settings UI**: Add "Sync Projects" capability.
-    - [ ] ~~**Proposal Context**: Allow linking a proposal to a specific OpenProject Project~~ (Cancelled).
+    - [x] ~~**Proposal Context**: Allow linking a proposal to a specific OpenProject Project~~ (Cancelled).
 
 - [x] **UI/UX Refinement**
     - [x] **Sync Status Dashboard**: Improve the Settings UI to show detailed sync stats (Total Users, Total Projects, Last Sync Time).
-    - [ ] **User Avatars**: Display OpenProject avatars where users are listed.
+    - [x] **User Avatars**: Display OpenProject avatars where users are listed.
 
 ## Phase 4: Expansion & Role-Based Features
 Focus on separating user roles (Proposer vs Reviewer) and adding depth to the application.
@@ -67,7 +67,7 @@ Focus on separating user roles (Proposer vs Reviewer) and adding depth to the ap
 - [ ] **Authentication & User Management**
     - [x] Create a `Login` page (replace hardcoded user).
     - [x] Implement `AuthProvider` with role support (`User`, `Reviewer`, `Admin`).
-    - [ ] Protect routes based on roles (e.g., only Reviewers can access `Evaluation`).
+    - [x] Protect routes based on roles (e.g., only Reviewers can access `Evaluation`).
     - [x] **Role-Based UI**:
         - [x] **Sidebar**: Hide "Evaluation", "Dept Review", "Settings" for regular users.
         - [x] **Dashboard**: Show different widgets based on role (e.g., "My Proposals" for User vs "Pending Reviews" for Reviewer).
@@ -75,29 +75,46 @@ Focus on separating user roles (Proposer vs Reviewer) and adding depth to the ap
 - [x] **Proposal Detail View**
     - [x] Create `ProposalDetail.tsx` (read-only view for proposers).
     - [x] Show full history/timeline of the proposal.
-    - [ ] Add "Comments" section for feedback.
+    - [x] Add "Comments" section for feedback.
 
 - [x] **Public Proposal List**
     - [x] Create `ProposalList.tsx` for browsing all public proposals.
     - [x] Add filter/sort options (by category, date, status).
     - [x] Add "Search" functionality.
 
-- [ ] **My Page / Profile**
-    - [ ] Create `Profile.tsx`.
-    - [ ] Display user stats (Total Proposals, Total Mileage, Adoption Rate).
-    - [ ] Show detailed mileage history with filter options.
+- [x] **My Page / Profile**
+    - [x] Create `Profile.tsx`.
+    - [x] Display user stats (Total Proposals, Total Mileage, Adoption Rate).
+    - [x] Show detailed mileage history (via Rewards page).
 
 ## Phase 5: Admin & System Hardening
 Features for system administrators and overall stability.
 
-- [ ] **Admin Dashboard**
-    - [ ] User Management (Add/Edit/Delete users).
-    - [ ] Department Management (Add/Edit departments).
-    - [ ] System Logs (Track important actions).
-    - [ ] **SSO Integration (KT BizOffice)**
-        - [ ] Analyze KT BizOffice SSO API/Protocol (SAML/OAuth/Token).
-        - [ ] Implement `SSOAuthProvider` to handle external tokens.
-        - [ ] Map groupware user data (Dept, Role) to local users.
+- [x] **Admin Dashboard (Settings)**
+    - [x] User Management (Add/Edit/Delete/Role Assignment).
+    - [x] Department Management (Add/Edit/Delete).
+    - [x] Category & Criteria Management (Dynamic configuration).
+    - [x] System Logs (Track important actions).
+
+- [x] **Email Notification System (Smart & Scheduled)**
+    - [x] **Architecture**: Python-based Email Service (Sidecar/Backend) for reliability.
+    - [x] **Management**: SMTP Configuration UI (Settings.tsx).
+    - [x] **Template Editor**: UI for customizing email subjects/bodies (New Proposal, Review, Result).
+    - [x] **Daily Digest (1일 1회 요약)**:
+        - [x] Aggregation Logic: "OOO님, 오늘 처리해야 할 심의가 5건 있습니다." (Implemented in notificationService.ts).
+        - [x] Simulation: Manual trigger button in Settings.
+    - [x] **Instant Alerts (Event-driven)**:
+        - [x] **Core Logic**: `sendInstantNotification` function (Template parsing, Setting check).
+        - [x] **Triggers**:
+            - [x] New Proposal -> Dept Leader.
+            - [x] Dept Pass -> Admin / 1st Reviewers.
+            - [x] Final Result -> Proposer.
+    - [x] **System Logs**: Record email sending events in System Logs (UI added to Settings).
+    - [ ] **Spam Prevention & Preferences**:
+        - [ ] **Admin Rules**: Default to "Daily Digest Only" or "System Errors Only" (Prevent inbox flooding).
+        - [x] **User Preferences**: Allow users to toggle [Instant / Daily / None] in My Page.
+    - [x] **SSO Integration (KT BizOffice)**
+        - [x] Skipped (User Request: Login already implemented).
 
 - [ ] **Search & Archive**
     - [ ] Implement global search (by title, proposer, department).
@@ -106,11 +123,35 @@ Features for system administrators and overall stability.
 - [ ] **Data Export**
     - [ ] Implement Excel/CSV export for proposals and mileage logs.
 
-## Phase 6: Advanced Workflow & Engagement (Deep Dive)
+## Phase 7: Reporting & Analytics
+Visualizing key performance indicators.
+
+- [ ] **Statistics Dashboard (Report Page)**
+    - [ ] **Filters**: Date Range Picker with Presets (1 Month, 3 Months, 1 Year, Custom).
+    - [ ] **Key Metrics**:
+        - [ ] Total Proposals Count.
+        - [ ] Adoption Rate (Completed / Total).
+        - [ ] Participation Rate (Proposals per Dept/User).
+    - [ ] **Charts**: Simple visual trends (Bar/Line charts).
+
+## Phase 8: AI Integration (Gemini Co-pilot)
+Transforming the system into an active assistant using personal API keys.
+
+- [ ] **AI Infrastructure**
+    - [ ] `services/aiService.ts`: Gemini SDK wrapper (`@google/generative-ai`).
+    - [ ] **Key Management**: UI in `Profile.tsx` to save API Key to localStorage.
+    - [ ] **Context Engine**: Logic to retrieving "Reference Proposals" (RAG-lite) for prompt injection.
+
+- [ ] **Feature Implementation**
+    - [ ] **Writer Support**: "Duplicate Check" & "Enhance Draft" (w/ Context).
+    - [ ] **Reviewer Support**: "Consistency Check" (Compare w/ S-Grade examples).
+    - [ ] **Report Support**: "AI Insights" (Trend Analysis).
+
+## Phase 9: Advanced Workflow & Engagement (Deep Dive)
 Features to drive sustained usage and handle complex real-world scenarios.
 
 - [ ] **Collaboration & Feedback Loop**
-    - [ ] **Comment System**: Threaded discussions on proposals (ask questions, provide feedback).
+    - [x] **Comment System**: Threaded discussions on proposals (ask questions, provide feedback).
     - [ ] **Mentions**: `@user` tagging to notify specific people.
     - [ ] **Co-Authorship**: Allow multiple users to edit/submit a single proposal.
 

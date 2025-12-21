@@ -1,10 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
-import { User, Mail, Building, Award, FileText, CheckCircle, TrendingUp, Calendar, ArrowRight } from 'lucide-react';
+import { User, Mail, Building, Award, FileText, CheckCircle, TrendingUp, Calendar, ArrowRight, Bell, Sparkles, Key } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { stripHtml } from '../utils/html';
+import { aiService } from '../services/aiService';
+import { toast } from 'sonner';
 
 const Profile: React.FC = () => {
-    const { currentUser, proposals, mileageLogs } = useProposalStore();
+    const { currentUser, proposals, mileageLogs, updateUser } = useProposalStore();
+
+    // AI Key State
+    const [apiKey, setApiKey] = useState('');
+    const [hasKey, setHasKey] = useState(false);
+    const [showKeyInput, setShowKeyInput] = useState(false);
+
+    useEffect(() => {
+        setHasKey(aiService.hasKey());
+    }, []);
+
+    const handleSaveKey = () => {
+        if (!apiKey.trim()) {
+            toast.error('API Key를 입력해주세요.');
+            return;
+        }
+        aiService.saveKey(apiKey.trim());
+        setHasKey(true);
+        setApiKey('');
+        setShowKeyInput(false);
+        toast.success('Gemini API Key가 저장되었습니다.');
+    };
+
+    const handleDeleteKey = () => {
+        if (window.confirm('정말 API Key를 삭제하시겠습니까? 관련 기능을 사용할 수 없게 됩니다.')) {
+            aiService.removeKey();
+            setHasKey(false);
+            toast.success('API Key가 삭제되었습니다.');
+        }
+    };
 
     // Calculate Stats
     const myProposals = proposals.filter(p => p.proposer.id === currentUser.id);
@@ -45,7 +77,7 @@ const Profile: React.FC = () => {
                         <div className="mt-6 space-y-3 text-left">
                             <div className="flex items-center gap-3 text-sm text-slate-600">
                                 <Mail size={16} className="text-slate-400" />
-                                <span>user@ideaflow.com</span>
+                                <span>{currentUser.email || '이메일 미등록'}</span>
                             </div>
                             <div className="flex items-center gap-3 text-sm text-slate-600">
                                 <Building size={16} className="text-slate-400" />
@@ -96,6 +128,134 @@ const Profile: React.FC = () => {
                             </Link>
                         </div>
                     </div>
+
+
+                    {/* Notification Settings */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            <Bell size={18} className="text-amber-500" />
+                            알림 설정
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-slate-900">실시간 이메일 알림</div>
+                                    <div className="text-xs text-slate-500">중요 이벤트 발생 시 즉시 메일 수신</div>
+                                </div>
+                                <button
+                                    onClick={() => updateUser(currentUser.id, {
+                                        emailPreferences: {
+                                            daily: currentUser.emailPreferences?.daily ?? true,
+                                            instant: !(currentUser.emailPreferences?.instant ?? true)
+                                        }
+                                    })}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(currentUser.emailPreferences?.instant ?? true) ? 'bg-slate-900' : 'bg-slate-200'
+                                        }`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(currentUser.emailPreferences?.instant ?? true) ? 'translate-x-6' : 'translate-x-1'
+                                        }`} />
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm font-medium text-slate-900">일일 요약 알림</div>
+                                    <div className="text-xs text-slate-500">매일 아침 대기 중인 업무 요약 수신</div>
+                                </div>
+                                <button
+                                    onClick={() => updateUser(currentUser.id, {
+                                        emailPreferences: {
+                                            instant: currentUser.emailPreferences?.instant ?? true,
+                                            daily: !(currentUser.emailPreferences?.daily ?? true)
+                                        }
+                                    })}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(currentUser.emailPreferences?.daily ?? true) ? 'bg-slate-900' : 'bg-slate-200'
+                                        }`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(currentUser.emailPreferences?.daily ?? true) ? 'translate-x-6' : 'translate-x-1'
+                                        }`} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* AI Configuration */}
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden mt-6">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                        <Sparkles size={100} className="text-purple-600" />
+                    </div>
+                    <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 relative z-10">
+                        <Sparkles size={18} className="text-purple-600" />
+                        AI Co-pilot 설정
+                    </h3>
+
+                    <div className="relative z-10">
+                        {hasKey ? (
+                            <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                        <CheckCircle size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-green-800">Gemini 연동 완료</p>
+                                        <p className="text-xs text-green-600">AI 기능을 사용할 준비가 되었습니다.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleDeleteKey}
+                                    className="text-xs text-slate-400 hover:text-red-500 underline"
+                                >
+                                    연동 해제
+                                </button>
+                            </div>
+                        ) : (
+                            <div>
+                                <p className="text-sm text-slate-600 mb-4">
+                                    Google Gemini API Key를 등록하면 제안서 작성 및 심사 보조 기능을 사용할 수 있습니다.
+                                </p>
+
+                                {!showKeyInput ? (
+                                    <button
+                                        onClick={() => setShowKeyInput(true)}
+                                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 transition-colors"
+                                    >
+                                        <Key size={16} />
+                                        API Key 등록하기
+                                    </button>
+                                ) : (
+                                    <div className="space-y-3 animate-fade-in-up">
+                                        <input
+                                            type="password"
+                                            placeholder="Gemini API Key 입력"
+                                            className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-sm"
+                                            value={apiKey}
+                                            onChange={(e) => setApiKey(e.target.value)}
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleSaveKey}
+                                                className="flex-1 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
+                                            >
+                                                저장
+                                            </button>
+                                            <button
+                                                onClick={() => setShowKeyInput(false)}
+                                                className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200"
+                                            >
+                                                취소
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-400 text-center">
+                                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-600">
+                                                API Key 발급받기
+                                            </a>
+                                            {' '} (Key는 브라우저에만 저장됩니다)
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Right Column: Activity History */}
@@ -133,7 +293,7 @@ const Profile: React.FC = () => {
                                             {proposal.title}
                                         </h4>
                                         <p className="text-sm text-slate-500 line-clamp-1">
-                                            {proposal.summary}
+                                            {stripHtml(proposal.summary)}
                                         </p>
                                     </Link>
                                 ))
@@ -142,7 +302,7 @@ const Profile: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
