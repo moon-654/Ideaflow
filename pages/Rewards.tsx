@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useProposalStore } from '../context/ProposalContext';
 import { Download, CheckCircle, Wallet, History, Send, Plus, X, BarChart2, List, Trash2, Search, Printer, FileText, ChevronRight } from 'lucide-react';
 import { exportMileageLogsToCSV } from '../services/exportService';
@@ -83,12 +84,15 @@ const Rewards: React.FC = () => {
 
     filteredLogs.forEach(log => {
       const key = `${log.proposalId || 'manual'}-${log.userId}`;
-      const prop = proposals.find(p => p.id === log.proposalId);
+      // Try to find proposal by ID, or by legacy proposalId format
+      const prop = proposals.find(p => p.id === log.proposalId)
+        || proposals.find(p => p.proposalNumber === log.proposalId)
+        || proposals.find(p => p.id === log.proposalId?.replace('#', 'prop-'));
 
       if (!map.has(key)) {
         map.set(key, {
           key,
-          proposalId: log.proposalId || '',
+          proposalId: prop?.id || log.proposalId || '', // Use actual proposal ID for navigation
           proposalNumber: prop?.proposalNumber || log.proposalId || '-',
           proposalTitle: log.proposalTitle || log.description || '-',
           userId: log.userId,
@@ -384,8 +388,24 @@ const Rewards: React.FC = () => {
                           />
                         </td>
                       )}
-                      <td className="p-4 font-mono text-xs text-indigo-600">{row.proposalNumber}</td>
-                      <td className="p-4 font-medium text-slate-700 truncate max-w-xs" title={row.proposalTitle}>{row.proposalTitle}</td>
+                      <td className="p-4">
+                        {row.proposalId ? (
+                          <Link to={`/proposals/${encodeURIComponent(row.proposalId)}`} className="font-mono text-xs text-indigo-600 hover:text-indigo-800 hover:underline">
+                            {row.proposalNumber}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {row.proposalId ? (
+                          <Link to={`/proposals/${encodeURIComponent(row.proposalId)}`} className="font-medium text-slate-700 hover:text-indigo-600 hover:underline truncate block max-w-xs" title={row.proposalTitle}>
+                            {row.proposalTitle}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-slate-400 truncate max-w-xs" title={row.proposalTitle}>{row.proposalTitle}</span>
+                        )}
+                      </td>
                       <td className="p-4">
                         <div className="font-bold">{row.userName}</div>
                         <div className="text-xs text-slate-400">{row.department}</div>

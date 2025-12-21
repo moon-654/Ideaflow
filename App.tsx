@@ -28,10 +28,10 @@ const App: React.FC = () => {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="dashboard" element={<Navigate to="/" replace />} />
+            <Route path="proposals/:id/edit" element={<ProposalEdit />} />
+            <Route path="proposals/:id" element={<ProposalDetail />} />
             <Route path="proposals" element={<ProposalSubmit />} />
             <Route path="public-proposals" element={<ProposalList />} />
-            <Route path="proposals/:id" element={<ProposalDetail />} />
-            <Route path="proposals/:id/edit" element={<ProposalEdit />} />
             <Route path="profile" element={<Profile />} />
             {/* Protected Routes - Reviewer/Admin only */}
             <Route path="dept_review" element={
