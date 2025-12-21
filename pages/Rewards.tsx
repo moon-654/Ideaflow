@@ -1,6 +1,8 @@
 import React from 'react';
 import { useProposalStore } from '../context/ProposalContext';
 import { Download, RefreshCw, CheckCircle, Wallet, History, Send } from 'lucide-react';
+import { exportMileageLogsToCSV } from '../services/exportService';
+import { toast } from 'sonner';
 
 const TYPE_MAP: Record<string, string> = {
   'Registration': '제안 등록',
@@ -56,8 +58,14 @@ const Rewards: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-slate-50">
-            <Download size={16} /> 엑셀 다운로드
+          <button
+            onClick={() => {
+              exportMileageLogsToCSV(relevantLogs);
+              toast.success('마일리지 내역이 CSV로 다운로드되었습니다.');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium hover:bg-slate-50"
+          >
+            <Download size={16} /> CSV 다운로드
           </button>
         </div>
       </div>

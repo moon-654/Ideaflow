@@ -83,6 +83,25 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     width: 100%;
                     margin: 8px 0;
                 }
+                .rich-text-editor .ql-editor p {
+                    margin-bottom: 1.25em;
+                    line-height: 1.75;
+                }
+                .rich-text-editor .ql-editor h1,
+                .rich-text-editor .ql-editor h2,
+                .rich-text-editor .ql-editor h3 {
+                    margin-top: 1.5em;
+                    margin-bottom: 0.5em;
+                    font-weight: bold;
+                }
+                .rich-text-editor .ql-editor ul,
+                .rich-text-editor .ql-editor ol {
+                    margin-bottom: 1.25em;
+                    padding-left: 1.5em;
+                }
+                .rich-text-editor .ql-editor li {
+                    margin-bottom: 0.5em;
+                }
                 .rich-text-editor .ql-editor td, 
                 .rich-text-editor .ql-editor th {
                     border: 1px solid #e2e8f0;

@@ -37,7 +37,9 @@ const Login: React.FC = () => {
         const finalUser = {
             ...user,
             role: assignedRole,
-            department: syncedUser?.department || user.department
+            department: syncedUser?.department || user.department,
+            canDeptReview: syncedUser?.canDeptReview,
+            emailPreferences: syncedUser?.emailPreferences,
         };
 
         setCurrentUser(finalUser);

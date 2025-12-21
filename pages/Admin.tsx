@@ -4,7 +4,7 @@ import { Users, Building, Activity, AlertCircle, Plus, Trash2, Shield, Search } 
 import { toast } from 'sonner';
 
 const Admin: React.FC = () => {
-    const { users, departments, systemLogs, addUser, removeUser, updateUserRole, addDepartment, removeDepartment } = useProposalStore();
+    const { users, departments, systemLogs, addUser, removeUser, updateUserRole, updateUser, addDepartment, removeDepartment } = useProposalStore();
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'depts' | 'logs'>('overview');
 
     // User Management State
@@ -136,6 +136,7 @@ const Admin: React.FC = () => {
                                 <tr>
                                     <th className="p-4">이름</th>
                                     <th className="p-4">부서</th>
+                                    <th className="p-4 text-center">부서 검토</th>
                                     <th className="p-4">권한</th>
                                     <th className="p-4 text-center">관리</th>
                                 </tr>
@@ -145,6 +146,17 @@ const Admin: React.FC = () => {
                                     <tr key={user.id} className="hover:bg-slate-50">
                                         <td className="p-4 font-bold">{user.name}</td>
                                         <td className="p-4 text-slate-500">{user.department}</td>
+                                        <td className="p-4 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!user.canDeptReview}
+                                                onChange={(e) => {
+                                                    updateUser(user.id, { canDeptReview: e.target.checked });
+                                                    toast.success(`${user.name}님의 부서 검토 권한이 ${e.target.checked ? '부여' : '해제'}되었습니다.`);
+                                                }}
+                                                className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary cursor-pointer"
+                                            />
+                                        </td>
                                         <td className="p-4">
                                             <select
                                                 className={`px-2 py-1 rounded text-xs font-bold border cursor-pointer

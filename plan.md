@@ -81,6 +81,7 @@ Focus on separating user roles (Proposer vs Reviewer) and adding depth to the ap
     - [x] Create `ProposalList.tsx` for browsing all public proposals.
     - [x] Add filter/sort options (by category, date, status).
     - [x] Add "Search" functionality.
+    - [ ] **Unique Numbering System**: Assign sequential IDs (e.g., PROP-2024-001) during submission to replace random hashes.
 
 - [x] **My Page / Profile**
     - [x] Create `Profile.tsx`.
@@ -116,44 +117,64 @@ Features for system administrators and overall stability.
     - [x] **SSO Integration (KT BizOffice)**
         - [x] Skipped (User Request: Login already implemented).
 
-- [ ] **Search & Archive**
-    - [ ] Implement global search (by title, proposer, department).
-    - [ ] Add "Archive" view for old/completed proposals.
+- [x] **Search & Archive** (Covered by Admin Proposal Management)
+    - [x] Archive view for old/completed proposals (Admin Proposals page).
+    - [x] Search functionality in proposal lists.
 
-- [ ] **Data Export**
-    - [ ] Implement Excel/CSV export for proposals and mileage logs.
+- [x] **Data Export** ✅
+    - [x] Implement Excel/CSV export for proposals (Admin Proposals page).
+    - [x] Implement Excel/CSV export for mileage logs (Rewards page).
 
-## Phase 7: Reporting & Analytics
+## Phase 7: Reporting & Analytics ✅
 Visualizing key performance indicators.
 
-- [ ] **Statistics Dashboard (Report Page)**
-    - [ ] **Filters**: Date Range Picker with Presets (1 Month, 3 Months, 1 Year, Custom).
-    - [ ] **Key Metrics**:
-        - [ ] Total Proposals Count.
-        - [ ] Adoption Rate (Completed / Total).
-        - [ ] Participation Rate (Proposals per Dept/User).
-    - [ ] **Charts**: Simple visual trends (Bar/Line charts).
+- [x] **Statistics Dashboard (Report Page)** - Already implemented!
+    - [x] **Filters**: Date Range Picker with Presets (Monthly, Quarterly, Fiscal, Custom).
+    - [x] **Key Metrics**:
+        - [x] Total Proposals Count.
+        - [x] Adoption Rate (Completed / Total).
+        - [x] Participation Rate (Proposals per Dept/User).
+    - [x] **Charts**: Bar/Line/Pie charts using recharts.
+    - [x] **AI Insight**: Gemini-powered analysis button.
 
-## Phase 8: AI Integration (Gemini Co-pilot)
+## Phase 8: AI Integration (Gemini Co-pilot) ✅
 Transforming the system into an active assistant using personal API keys.
 
-- [ ] **AI Infrastructure**
-    - [ ] `services/aiService.ts`: Gemini SDK wrapper (`@google/generative-ai`).
-    - [ ] **Key Management**: UI in `Profile.tsx` to save API Key to localStorage.
-    - [ ] **Context Engine**: Logic to retrieving "Reference Proposals" (RAG-lite) for prompt injection.
+- [x] **AI Infrastructure** - Already implemented!
+    - [x] `services/aiService.ts`: Gemini SDK wrapper (`@google/generative-ai`).
+    - [x] **Key Management**: UI in `Profile.tsx` to save API Key to localStorage.
+    - [x] **Model Selection**: Multiple models support (flash/pro/exp).
+    - [x] **Context Engine**: checkDuplicates compares with existing proposals.
 
-- [ ] **Feature Implementation**
-    - [ ] **Writer Support**: "Duplicate Check" & "Enhance Draft" (w/ Context).
-    - [ ] **Reviewer Support**: "Consistency Check" (Compare w/ S-Grade examples).
-    - [ ] **Report Support**: "AI Insights" (Trend Analysis).
+- [x] **Feature Implementation** - Already implemented!
+    - [x] **Writer Support**: `refineDraft` for enhancing drafts, `checkDuplicates` for similarity check.
+    - [x] **Reviewer Support**: `analyzeProposal` (1st), `analyze2ndRound` (2nd) with scoring guidelines.
+    - [x] **Report Support**: `generateReportInsight` for AI-powered analytics.
+
 
 ## Phase 9: Advanced Workflow & Engagement (Deep Dive)
 Features to drive sustained usage and handle complex real-world scenarios.
 
-- [ ] **Collaboration & Feedback Loop**
+- [x] **Collaboration & Feedback Loop**
     - [x] **Comment System**: Threaded discussions on proposals (ask questions, provide feedback).
+    - [x] **Unified Communication**: Combined view of review feedback + general comments + replies.
+    - [x] **Reply System**: Nested replies to comments for back-and-forth discussion.
     - [ ] **Mentions**: `@user` tagging to notify specific people.
     - [ ] **Co-Authorship**: Allow multiple users to edit/submit a single proposal.
+
+- [x] **Revision Management**
+    - [x] **Supplement Request**: Reviewers can request proposer to revise during review.
+    - [x] **Version History**: Track all revisions with snapshots.
+    - [x] **Diff Comparison**: Show changes between versions (old → new).
+    - [x] **Deadline Tracking**: Admin-configurable deadline for supplement requests (default: 1 week).
+
+- [x] **Notification System**
+    - [x] **In-App Notifications**: Bell icon with unread count badge and dropdown.
+    - [x] **Mark as Read**: Individual and bulk read status management.
+    - [x] **Event-driven Alerts**: Notify on comments, replies, supplement requests, status changes.
+
+- [x] **Auto-Finalize**
+    - [x] Automatically advance proposals when all required reviewers complete evaluation.
 
 - [ ] **Advanced Lifecycle Management**
     - [ ] **Return for Modification**: Instead of simple Rejection, allow reviewers to send back for edits.
@@ -165,12 +186,37 @@ Features to drive sustained usage and handle complex real-world scenarios.
     - [ ] **Hall of Fame**: Showcase best practices with before/after photos.
     - [ ] **Badges**: Achievements (e.g., "First S-Grade", "10 Proposals").
 
-- [ ] **Mobile Experience**
-    - [ ] **PWA Support**: Make the app installable on mobile devices.
-    - [ ] **Mobile-First Submission**: Optimized flow for submitting photos/ideas on the go.
+## Phase 10: Admin Proposal Management ✅
+Complete administrative control over all proposals in the system.
+
+- [x] **Proposal Actions (Individual)**
+    - [x] **Soft Delete**: Mark as deleted (hidden from all views, recoverable).
+    - [x] **Archive**: Move to archive (still searchable, read-only).
+    - [x] **Hide/Unhide**: Toggle visibility without deletion.
+    - [x] **Force Status Change**: Admin can manually set any proposal status.
+    - [x] **Transfer Ownership**: Reassign proposal to different proposer.
+
+- [x] **Bulk Operations**
+    - [x] **Multi-Select**: Checkbox selection for batch processing.
+    - [x] **Bulk Archive**: Archive multiple old proposals at once.
+    - [x] **Bulk Delete**: Soft delete multiple proposals.
+    - [ ] **Bulk Export**: Export selected proposals to Excel/CSV. (Deferred)
+
+- [x] **Admin Proposal List UI**
+    - [x] **Dedicated Page**: `/admin_proposals` for full management view.
+    - [x] **Extended Filters**: By status, search, visibility.
+    - [x] **Trash/Archive Views**: Separate tabs for deleted and archived proposals.
+    - [x] **Restore Function**: Recover deleted proposals.
+    - [x] **Audit Trail**: Log all admin actions with timestamp and reason.
+
+- [x] **Data Integrity**
+    - [x] **Confirmation Dialogs**: Require explicit confirmation for destructive actions.
+    - [x] **Reason Input**: Optional reason field for delete/archive actions.
 
 ## Verification Plan
 - **Manual Testing**:
     1.  **Submit Proposal**: Create a new proposal and verify it appears on the Dashboard.
     2.  **Review Flow**: Log in as a reviewer, approve the proposal, and verify status change.
     3.  **Settings**: Change mileage rules, save, reload page, and verify settings persist.
+
+

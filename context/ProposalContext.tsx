@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation } from '../types';
+import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus } from '../types';
 import { sendInstantNotification } from '../services/notificationService';
 import { MOCK_PROPOSALS, MOCK_MILEAGE_LOGS, CURRENT_USER } from '../constants';
 
@@ -28,6 +28,7 @@ interface ProposalContextType {
     departments: Department[];
     systemLogs: SystemLog[];
     settings: SettingsState;
+    notifications: Notification[];  // In-app notifications
     addProposal: (proposal: Proposal) => void;
     updateProposal: (id: string, updates: Partial<Proposal>) => void;
     addMileageLog: (log: MileageLog) => void;
@@ -49,6 +50,29 @@ interface ProposalContextType {
     addReviewerEvaluation: (proposalId: string, evaluation: ReviewerEvaluation) => void;
     getReviewerCount: (proposalId: string, round: '1st' | '2nd') => number;
     hasUserReviewed: (proposalId: string, userId: string, round: '1st' | '2nd') => boolean;
+    // Unified Comment System
+    addUnifiedComment: (proposalId: string, comment: Omit<UnifiedComment, 'id' | 'createdAt'>) => void;
+    replyToComment: (proposalId: string, parentId: string, content: string) => void;
+    // Revision System
+    createRevision: (proposalId: string, changeNote?: string) => void;
+    requestSupplement: (proposalId: string, reason: string) => void;
+    completeSupplementRequest: (proposalId: string, requestId: string, revisionId: string) => void;
+    // Notification System
+    addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
+    markNotificationRead: (notificationId: string) => void;
+    markAllNotificationsRead: () => void;
+    getUnreadNotificationCount: () => number;
+    // Admin Proposal Management
+    softDeleteProposal: (proposalId: string, reason?: string) => void;
+    archiveProposal: (proposalId: string, reason?: string) => void;
+    hideProposal: (proposalId: string) => void;
+    unhideProposal: (proposalId: string) => void;
+    restoreProposal: (proposalId: string) => void;
+    forceStatusChange: (proposalId: string, newStatus: ProposalStatus) => void;
+    transferOwnership: (proposalId: string, newOwnerId: string, newOwnerName: string) => void;
+    bulkArchive: (proposalIds: string[], reason?: string) => void;
+    bulkDelete: (proposalIds: string[], reason?: string) => void;
+    updateCoAuthors: (proposalId: string, coAuthors: { id: string; name: string; department: string }[]) => void;
 }
 
 const ProposalContext = createContext<ProposalContextType | undefined>(undefined);
@@ -82,6 +106,12 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const [systemLogs, setSystemLogs] = useState<SystemLog[]>(() => {
         const saved = localStorage.getItem('ideaflow_logs');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    // In-app notifications
+    const [notifications, setNotifications] = useState<Notification[]>(() => {
+        const saved = localStorage.getItem('ideaflow_notifications');
         return saved ? JSON.parse(saved) : [];
     });
 
@@ -169,6 +199,9 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Required reviewers for grade confirmation (majority rule)
             totalReviewers1st: 3,
             totalReviewers2nd: 5,
+
+            // Supplement Request Settings
+            supplementDeadlineDays: 7,  // Default 1 week
         };
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -276,12 +309,24 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const updateProposal = (id: string, updates: Partial<Proposal>) => {
-        setProposals(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+        setProposals(prev => prev.map(p => {
+            if (p.id !== id) return p;
+
+            // Safety Guard: Revoke edit permission on Reject or Status Advance
+            let safetyUpdates = {};
+            if (updates.status === 'Rejected' || updates.status === '1st_Review' || updates.status === 'Dept_Review') {
+                safetyUpdates = { canEditDuringReview: false };
+            }
+
+            return { ...p, ...updates, ...safetyUpdates };
+        }));
 
         // Trigger Notification on Status Change
         const target = proposals.find(p => p.id === id);
         if (target && updates.status && updates.status !== target.status) {
             const newProposal = { ...target, ...updates } as Proposal;
+            // ... (keep notification logic same) ...
+
             const contextData = {
                 users,
                 config: settings.emailConfig,
@@ -553,8 +598,18 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             if (round === '1st') {
                 const passed = averageTotal >= settings.evaluationCutoff;
+                const requiredReviewers = settings.totalReviewers1st || 1;
+                const allReviewersComplete = newReviews.length >= requiredReviewers;
+
+                // Auto-finalize if all required reviewers have submitted
+                let newStatus = p.status;
+                if (allReviewersComplete) {
+                    newStatus = passed ? '2nd_Review' : 'Rejected';
+                }
+
                 return {
                     ...p,
+                    status: newStatus,
                     reviews1st: newReviews,
                     aggregated1st: {
                         averageScores,
@@ -578,8 +633,19 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     }
                 }
 
+                const requiredReviewers = settings.totalReviewers2nd || 1;
+                const allReviewersComplete = newReviews.length >= requiredReviewers;
+
+                // Auto-finalize if all required reviewers have submitted
+                let newStatus = p.status;
+                if (allReviewersComplete) {
+                    newStatus = 'Completed';
+                }
+
                 return {
                     ...p,
+                    status: newStatus,
+                    grade2nd: allReviewersComplete ? finalGrade : p.grade2nd,
                     reviews2nd: newReviews,
                     aggregated2nd: {
                         averageScores,
@@ -609,12 +675,347 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return reviews?.some(r => r.reviewerId === userId) || false;
     };
 
+    // Unified Comment System
+    const addUnifiedComment = (proposalId: string, comment: Omit<UnifiedComment, 'id' | 'createdAt'>) => {
+        const newComment: UnifiedComment = {
+            ...comment,
+            id: `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: new Date().toISOString(),
+        };
+
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                unifiedComments: [...(p.unifiedComments || []), newComment]
+            };
+        }));
+
+        // Also create notification for relevant users
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (proposal && proposal.proposer.id !== currentUser.id) {
+            addNotification({
+                recipientId: proposal.proposer.id,
+                type: 'new_comment',
+                proposalId,
+                proposalTitle: proposal.title,
+                message: `${currentUser.name}님이 제안에 코멘트를 달았습니다.`,
+                link: `/proposals/${proposalId}`
+            });
+        }
+    };
+
+    const replyToComment = (proposalId: string, parentId: string, content: string) => {
+        addUnifiedComment(proposalId, {
+            proposalId,
+            authorId: currentUser.id,
+            authorName: currentUser.name,
+            authorRole: currentUser.role,
+            type: 'reply',
+            parentId,
+            content,
+            visibility: 'public',
+        });
+    };
+
+    // Revision System
+    const createRevision = (proposalId: string, changeNote?: string) => {
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (!proposal) return;
+
+        const newVersion = (proposal.currentVersion || 1) + 1;
+        const newRevision: ProposalRevision = {
+            id: `rev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            proposalId,
+            version: proposal.currentVersion || 1,
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser.id,
+            createdByName: currentUser.name,
+            changeNote,
+            snapshot: {
+                title: proposal.title,
+                summary: proposal.summary,
+                currentProblem: proposal.currentProblem || '',
+                improvementPlan: proposal.improvementPlan || '',
+                expectedEffect: proposal.expectedEffect || '',
+                expectedAmount: proposal.expectedAmount,
+            }
+        };
+
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                revisions: [...(p.revisions || []), newRevision],
+                currentVersion: newVersion,
+            };
+        }));
+    };
+
+    const requestSupplement = (proposalId: string, reason: string) => {
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (!proposal) return;
+
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + (settings.supplementDeadlineDays || 7));
+
+        const newRequest: SupplementRequest = {
+            id: `supp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            proposalId,
+            requestedBy: currentUser.id,
+            requestedByName: currentUser.name,
+            requestedAt: new Date().toISOString(),
+            deadline: deadline.toISOString(),
+            reason,
+            status: 'pending',
+        };
+
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                status: 'Modification_Requested', // Force status update
+                supplementRequests: [...(p.supplementRequests || []), newRequest],
+                canEditDuringReview: true,
+            };
+        }));
+
+        // Add unified comment for the supplement request
+        addUnifiedComment(proposalId, {
+            proposalId,
+            authorId: currentUser.id,
+            authorName: currentUser.name,
+            authorRole: currentUser.role,
+            type: 'supplement_request',
+            content: reason,
+            visibility: 'public',
+        });
+
+        // Notify proposer
+        addNotification({
+            recipientId: proposal.proposer.id,
+            type: 'supplement_request',
+            proposalId,
+            proposalTitle: proposal.title,
+            message: `${currentUser.name}님이 보완 요청을 했습니다. 기한: ${deadline.toLocaleDateString('ko-KR')}`,
+            link: `/proposals/${proposalId}/edit`
+        });
+
+        // Trigger email notification
+        sendInstantNotification('deptReview', proposal, {
+            users,
+            config: settings.emailConfig,
+            templates: settings.emailTemplates,
+            notifySettings: settings.notifications,
+            addSystemLog
+        }).catch(console.error);
+    };
+
+    const completeSupplementRequest = (proposalId: string, requestId: string, revisionId: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                supplementRequests: p.supplementRequests?.map(req =>
+                    req.id === requestId
+                        ? { ...req, status: 'completed' as const, completedAt: new Date().toISOString(), revisionId }
+                        : req
+                ),
+                canEditDuringReview: false,
+            };
+        }));
+
+        // Notify the requester
+        const proposal = proposals.find(p => p.id === proposalId);
+        const request = proposal?.supplementRequests?.find(r => r.id === requestId);
+        if (proposal && request) {
+            addNotification({
+                recipientId: request.requestedBy,
+                type: 'supplement_completed',
+                proposalId,
+                proposalTitle: proposal.title,
+                message: `${currentUser.name}님이 보완을 완료했습니다.`,
+                link: `/proposals/${proposalId}`
+            });
+        }
+    };
+
+    // Notification System
+    const addNotification = (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
+        const newNotification: Notification = {
+            ...notification,
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: new Date().toISOString(),
+            read: false,
+        };
+
+        setNotifications(prev => [newNotification, ...prev]);
+    };
+
+    const markNotificationRead = (notificationId: string) => {
+        setNotifications(prev => prev.map(n =>
+            n.id === notificationId ? { ...n, read: true } : n
+        ));
+    };
+
+    const markAllNotificationsRead = () => {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    };
+
+    const getUnreadNotificationCount = (): number => {
+        return notifications.filter(n => !n.read && n.recipientId === currentUser.id).length;
+    };
+
+    // Admin Proposal Management Functions
+    const softDeleteProposal = (proposalId: string, reason?: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                isDeleted: true,
+                deletedAt: new Date().toISOString(),
+                deletedBy: currentUser.name,
+                deletedReason: reason,
+            };
+        }));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `제안 삭제: ${proposalId}`,
+            user: currentUser.name,
+            details: reason || '사유 없음',
+            level: 'Info',
+        });
+    };
+
+    const archiveProposal = (proposalId: string, reason?: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                isArchived: true,
+                archivedAt: new Date().toISOString(),
+                archivedBy: currentUser.name,
+                archivedReason: reason,
+            };
+        }));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `제안 보관: ${proposalId}`,
+            user: currentUser.name,
+            details: reason || '사유 없음',
+            level: 'Info',
+        });
+    };
+
+    const hideProposal = (proposalId: string) => {
+        setProposals(prev => prev.map(p =>
+            p.id === proposalId ? { ...p, isHidden: true } : p
+        ));
+    };
+
+    const unhideProposal = (proposalId: string) => {
+        setProposals(prev => prev.map(p =>
+            p.id === proposalId ? { ...p, isHidden: false } : p
+        ));
+    };
+
+    const restoreProposal = (proposalId: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                isDeleted: false,
+                isArchived: false,
+                deletedAt: undefined,
+                deletedBy: undefined,
+                deletedReason: undefined,
+                archivedAt: undefined,
+                archivedBy: undefined,
+                archivedReason: undefined,
+            };
+        }));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `제안 복원: ${proposalId}`,
+            user: currentUser.name,
+            details: '',
+            level: 'Info',
+        });
+    };
+
+    const forceStatusChange = (proposalId: string, newStatus: ProposalStatus) => {
+        setProposals(prev => prev.map(p =>
+            p.id === proposalId ? { ...p, status: newStatus } : p
+        ));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `상태 강제 변경: ${proposalId} -> ${newStatus}`,
+            user: currentUser.name,
+            details: '',
+            level: 'Info',
+        });
+    };
+
+    const transferOwnership = (proposalId: string, newOwnerId: string, newOwnerName: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                proposer: { ...p.proposer, id: newOwnerId, name: newOwnerName },
+            };
+        }));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `소유권 이전: ${proposalId} -> ${newOwnerName}`,
+            user: currentUser.name,
+            details: '',
+            level: 'Info',
+        });
+    };
+
+    const bulkArchive = (proposalIds: string[], reason?: string) => {
+        proposalIds.forEach(id => archiveProposal(id, reason));
+    };
+
+    const bulkDelete = (proposalIds: string[], reason?: string) => {
+        proposalIds.forEach(id => softDeleteProposal(id, reason));
+    };
+
+    const updateCoAuthors = (proposalId: string, coAuthors: { id: string; name: string; department: string }[]) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                coAuthors
+            };
+        }));
+        addSystemLog({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: `공동 제안자 수정: ${proposalId}`,
+            user: currentUser.name,
+            details: `인원: ${coAuthors.length}명`,
+            level: 'Info',
+        });
+    };
+
+    // Persist notifications to localStorage
+    useEffect(() => {
+        localStorage.setItem('ideaflow_notifications', JSON.stringify(notifications));
+    }, [notifications]);
+
     return (
         <ProposalContext.Provider value={{
             proposals,
             mileageLogs,
             currentUser,
             settings,
+            notifications,
             addProposal,
             updateProposal,
             addMileageLog,
@@ -637,7 +1038,31 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             syncProjectsFromOpenProject,
             addReviewerEvaluation,
             getReviewerCount,
-            hasUserReviewed
+            hasUserReviewed,
+            // Unified Comment System
+            addUnifiedComment,
+            replyToComment,
+            // Revision System
+            createRevision,
+            requestSupplement,
+            completeSupplementRequest,
+            // Notification System
+            addNotification,
+            markNotificationRead,
+            markAllNotificationsRead,
+            getUnreadNotificationCount,
+            // Admin Proposal Management
+            softDeleteProposal,
+            archiveProposal,
+            hideProposal,
+            unhideProposal,
+            restoreProposal,
+            forceStatusChange,
+            transferOwnership,
+            bulkArchive,
+
+            bulkDelete,
+            updateCoAuthors,
         }}>
             {children}
         </ProposalContext.Provider>

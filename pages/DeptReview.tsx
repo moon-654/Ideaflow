@@ -58,7 +58,8 @@ const DeptReview: React.FC = () => {
 
     updateProposal(id, {
       status: newStatus,
-      deptReviewComment: rejectReason[id] || ''
+      deptReviewComment: rejectReason[id] || '',
+      ...(action === 'reject' ? { rejectReason: rejectReason[id] } : {})
     });
 
     toast.success(message);

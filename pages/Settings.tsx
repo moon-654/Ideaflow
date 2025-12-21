@@ -674,7 +674,6 @@ const Settings: React.FC = () => {
                       <th className="p-3 font-semibold">이름</th>
                       <th className="p-3 font-semibold">이메일</th>
                       <th className="p-3 font-semibold">부서</th>
-                      <th className="p-3 font-semibold">부서</th>
                       <th className="p-3 font-semibold">역할</th>
                       <th className="p-3 font-semibold text-center">부서 검토 권한</th>
                     </tr>

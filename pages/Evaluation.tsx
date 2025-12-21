@@ -16,7 +16,7 @@ interface AIAnalysisResult {
 }
 
 const Evaluation: React.FC = () => {
-  const { proposals, updateProposal, settings, currentUser, addReviewerEvaluation, hasUserReviewed, getReviewerCount } = useProposalStore();
+  const { proposals, updateProposal, settings, currentUser, addReviewerEvaluation, hasUserReviewed, getReviewerCount, requestSupplement } = useProposalStore();
   const [activeRound, setActiveRound] = useState<'1st' | '2nd'>(() => {
     return currentUser.role === '2차 심의위원' ? '2nd' : '1st';
   });
@@ -43,8 +43,8 @@ const Evaluation: React.FC = () => {
   const grades = settings.grades || [];
   const totalMaxPoints = criteria.reduce((sum, c) => sum + c.maxPoints, 0);
   const totalMaxPoints2nd = criteria2nd.reduce((sum, c) => sum + c.maxPoints, 0);
-  const requiredReviewers1st = Math.ceil((settings.totalReviewers1st || 3) / 2) + 1; // Majority
-  const requiredReviewers2nd = Math.ceil((settings.totalReviewers2nd || 5) / 2) + 1;
+  const requiredReviewers1st = settings.totalReviewers1st || 1; // Use setting directly
+  const requiredReviewers2nd = settings.totalReviewers2nd || 1;
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -710,6 +710,32 @@ const Evaluation: React.FC = () => {
                         <div className="text-center py-4 text-slate-400 text-sm">
                           <p>⏳ 아직 제출된 심사가 없습니다.</p>
                           <p className="text-xs mt-1">심의위원들이 평가를 제출하면 여기에 표시됩니다.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Supplement Request Button - Reviewers can request */}
+                  {(currentUser.role === 'Admin' || currentUser.role === 'Reviewer' || currentUser.role === '1차 심의위원') && !hasUserReviewed(prop.id, currentUser.id, '1st') && (
+                    <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <button
+                        onClick={() => {
+                          const reason = window.prompt('보완 요청 사유를 입력해주세요:');
+                          if (reason && reason.trim()) {
+                            requestSupplement(prop.id, reason.trim());
+                            toast.success('보완 요청이 전송되었습니다. 제안자에게 알림이 발송됩니다.');
+                          }
+                        }}
+                        className="w-full py-2 px-4 bg-orange-500 text-white rounded-lg font-bold text-sm hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+                      >
+                        📝 보완 요청하기
+                      </button>
+                      <p className="text-xs text-orange-600 mt-2 text-center">
+                        제안 내용 보완이 필요할 경우 제안자에게 수정 요청을 보냅니다.
+                      </p>
+                      {prop.supplementRequests && prop.supplementRequests.filter(r => r.status === 'pending').length > 0 && (
+                        <div className="mt-2 text-xs text-orange-700 bg-orange-100 p-2 rounded">
+                          ⏳ 보완 요청 진행중 ({prop.supplementRequests.filter(r => r.status === 'pending').length}건)
                         </div>
                       )}
                     </div>

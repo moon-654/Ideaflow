@@ -50,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, isMobileOpen, setIsMobileO
     { id: 'rewards', label: '포상 및 마일리지', icon: <Award size={20} />, path: '/rewards', roles: ALL_ACCESS },
     { id: 'profile', label: '마이 페이지', icon: <User size={20} />, path: '/profile', roles: ALL_ACCESS },
     { id: 'report', label: '통계 및 보고서', icon: <BarChart2 size={20} />, path: '/report', roles: REVIEWER_ACCESS },
+    { id: 'admin_proposals', label: '제안 관리', icon: <FileText size={20} />, path: '/admin_proposals', roles: ADMIN_ONLY },
     { id: 'admin', label: '관리자', icon: <Shield size={20} />, path: '/admin', roles: ADMIN_ONLY },
     { id: 'settings', label: '시스템 설정', icon: <Settings size={20} />, path: '/settings', roles: ADMIN_ONLY },
   ];

@@ -102,7 +102,11 @@ const Profile: React.FC = () => {
     };
 
     // Calculate Stats
-    const myProposals = proposals.filter(p => p.proposer.id === currentUser.id);
+    const myProposals = proposals.filter(p =>
+        p.proposer.id === currentUser.id ||
+        p.proposer.name === currentUser.name ||
+        p.coAuthors?.some(ca => ca.id === currentUser.id)
+    );
     const totalProposals = myProposals.length;
     const acceptedProposals = myProposals.filter(p => p.status === 'Completed').length;
     const adoptionRate = totalProposals > 0 ? Math.round((acceptedProposals / totalProposals) * 100) : 0;
@@ -119,7 +123,8 @@ const Profile: React.FC = () => {
         '1st_Review': '1차 심의',
         '2nd_Review': '2차 심의',
         'Completed': '최종 완료',
-        'Rejected': '반려됨'
+        'Rejected': '반려됨',
+        'Modification_Requested': '보완 요청'
     };
 
     return (
@@ -387,8 +392,9 @@ const Profile: React.FC = () => {
                                             <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider
                         ${proposal.status === 'New' ? 'bg-blue-100 text-blue-700' :
                                                     proposal.status === 'Rejected' ? 'bg-red-100 text-red-700' :
-                                                        proposal.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                                                            'bg-slate-100 text-slate-700'}
+                                                        proposal.status === 'Modification_Requested' ? 'bg-amber-100 text-amber-700' :
+                                                            proposal.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                                                                'bg-slate-100 text-slate-700'}
                       `}>
                                                 {STATUS_LABELS[proposal.status] || proposal.status}
                                             </span>

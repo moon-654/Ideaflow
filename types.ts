@@ -116,11 +116,36 @@ export interface Proposal {
   // Mileage
   mileageAccrued?: number;
 
-  // Comments
+  // Comments (Legacy)
   comments?: Comment[];
 
   // Expected monetary effect
   expectedAmount?: number;
+
+  // Unified Comment System
+  unifiedComments?: UnifiedComment[];
+
+  // Revision Management
+  revisions?: ProposalRevision[];
+  currentVersion?: number;
+  canEditDuringReview?: boolean;  // Set to true when supplement requested
+
+  // Supplement Requests
+  supplementRequests?: SupplementRequest[];
+
+  // Admin Management
+  isDeleted?: boolean;
+  isArchived?: boolean;
+  isHidden?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deletedReason?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  archivedReason?: string;
+
+  // Co-Authors
+  coAuthors?: { id: string; name: string; department: string }[];
 }
 
 export interface Comment {
@@ -130,6 +155,68 @@ export interface Comment {
   content: string;
   createdAt: string;
 }
+
+// Unified Comment System
+export interface UnifiedComment {
+  id: string;
+  proposalId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  type: 'general' | 'review_1st' | 'review_2nd' | 'dept_review' | 'supplement_request' | 'reply';
+  parentId?: string;  // For replies
+  content: string;
+  visibility: 'public' | 'reviewers_only' | 'admin_only';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// Proposal Revision for tracking changes
+export interface ProposalRevision {
+  id: string;
+  proposalId: string;
+  version: number;
+  createdAt: string;
+  createdBy: string;
+  createdByName: string;
+  changeNote?: string;
+  snapshot: {
+    title: string;
+    summary: string;
+    currentProblem: string;
+    improvementPlan: string;
+    expectedEffect: string;
+    expectedAmount?: number;
+  };
+}
+
+// Supplement Request for revision workflow
+export interface SupplementRequest {
+  id: string;
+  proposalId: string;
+  requestedBy: string;
+  requestedByName: string;
+  requestedAt: string;
+  deadline: string;  // ISO date string
+  reason: string;
+  status: 'pending' | 'completed' | 'expired';
+  completedAt?: string;
+  revisionId?: string;  // Links to the revision created
+}
+
+// In-app Notification
+export interface Notification {
+  id: string;
+  recipientId: string;
+  type: 'new_comment' | 'reply' | 'supplement_request' | 'supplement_completed' | 'review_feedback' | 'status_change';
+  proposalId: string;
+  proposalTitle: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+  link?: string;  // Navigation link
+}
+
 
 export interface MileageLog {
   id: string;
@@ -237,4 +324,7 @@ export interface SettingsState {
   // Required reviewers for grade confirmation (majority = totalReviewers / 2 + 1)
   totalReviewers1st: number;
   totalReviewers2nd: number;
+
+  // Supplement Request Settings
+  supplementDeadlineDays: number;  // Default 7 (1 week)
 }

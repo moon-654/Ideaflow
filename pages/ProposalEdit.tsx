@@ -10,7 +10,7 @@ import { aiService } from '../services/aiService';
 const ProposalEdit: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { proposals, updateProposal, departments, currentUser, settings } = useProposalStore();
+    const { proposals, updateProposal, departments, currentUser, settings, users } = useProposalStore();
 
     const [category, setCategory] = useState('');
     const [title, setTitle] = useState('');
@@ -19,6 +19,7 @@ const ProposalEdit: React.FC = () => {
     const [improvementPlan, setImprovementPlan] = useState('');
     const [expectedEffect, setExpectedEffect] = useState('');
     const [expectedAmount, setExpectedAmount] = useState<string>('');
+    const [coAuthors, setCoAuthors] = useState<{ id: string; name: string; department: string }[]>([]);
 
     const [isRefining, setIsRefining] = useState(false);
 
@@ -46,7 +47,11 @@ const ProposalEdit: React.FC = () => {
         const proposal = proposals.find(p => p.id === id);
         if (proposal) {
             // Verify ownership
-            if (proposal.proposer.id !== currentUser.id) {
+            // Verify ownership (allow proposer, co-authors, and admins)
+            const isCoAuthor = proposal.coAuthors?.some(a => a.id === currentUser.id);
+            const canEdit = proposal.proposer.id === currentUser.id || isCoAuthor || currentUser.role === 'Admin';
+
+            if (!canEdit) {
                 toast.error('수정 권한이 없습니다.');
                 navigate('/');
                 return;
@@ -59,6 +64,7 @@ const ProposalEdit: React.FC = () => {
             setImprovementPlan(proposal.improvementPlan || '');
             setExpectedEffect(proposal.expectedEffect || '');
             setExpectedAmount(formatAmount(proposal.expectedAmount));
+            setCoAuthors(proposal.coAuthors || []);
         } else {
             toast.error('제안을 찾을 수 없습니다.');
             navigate('/');
@@ -86,6 +92,7 @@ const ProposalEdit: React.FC = () => {
             improvementPlan,
             expectedEffect,
             expectedAmount: parseAmount(expectedAmount),
+            coAuthors,
             status: 'Dept_Review',
             deptReviewComment: ''
         });
@@ -244,6 +251,53 @@ const ProposalEdit: React.FC = () => {
                         </button>
                     </div>
 
+                    {/* Co-Authorship Selection */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                            👥 공동 작성자
+                        </h3>
+                        <div className="space-y-4">
+                            <select
+                                className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-primary focus:border-primary text-sm"
+                                onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    if (!selectedId) return;
+                                    const user = users.find(u => u.id === selectedId);
+                                    if (user && !coAuthors.find(a => a.id === user.id) && user.id !== currentUser.id) {
+                                        setCoAuthors([...coAuthors, { id: user.id, name: user.name, department: user.department }]);
+                                    }
+                                    e.target.value = '';
+                                }}
+                            >
+                                <option value="">공동 작성자 추가...</option>
+                                {users
+                                    .filter(u => u.id !== currentUser.id && !coAuthors.find(a => a.id === u.id))
+                                    .map(user => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.name} ({user.department})
+                                        </option>
+                                    ))
+                                }
+                            </select>
+
+                            <div className="flex flex-wrap gap-2">
+                                {coAuthors.map(author => (
+                                    <div key={author.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-medium text-slate-700">
+                                        <span>{author.name} ({author.department})</span>
+                                        <button
+                                            onClick={() => setCoAuthors(coAuthors.filter(a => a.id !== author.id))}
+                                            className="text-slate-400 hover:text-red-500 transition-colors"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                ))}
+                                {coAuthors.length === 0 && (
+                                    <p className="text-xs text-slate-400 italic">공동 작성자가 없습니다.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                     <div className="space-y-2">
                         <label className="block text-sm font-bold text-slate-900">현황 및 문제점</label>
                         <RichTextEditor

@@ -10,6 +10,7 @@ import ProposalEdit from './pages/ProposalEdit';
 import ProposalList from './pages/ProposalList';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
+import AdminProposals from './pages/AdminProposals';
 import Rewards from './pages/Rewards';
 import DeptReview from './pages/DeptReview';
 import Settings from './pages/Settings';
@@ -47,6 +48,11 @@ const App: React.FC = () => {
             <Route path="admin" element={
               <ProtectedRoute requiredPermission="manageUsers">
                 <Admin />
+              </ProtectedRoute>
+            } />
+            <Route path="admin_proposals" element={
+              <ProtectedRoute requiredPermission="manageUsers">
+                <AdminProposals />
               </ProtectedRoute>
             } />
             <Route path="rewards" element={
