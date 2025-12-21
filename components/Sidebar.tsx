@@ -95,8 +95,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, isMobileOpen, setIsMobileO
             <Lightbulb size={20} />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-none">IdeaFlow</h1>
-            <span className="text-xs text-slate-500 font-medium">관리자 포털</span>
+            <h1 className="text-lg font-bold text-slate-900 leading-none">ASHIMORI KOREA</h1>
+            <span className="text-xs text-slate-500 font-medium">ACE제안시스템</span>
           </div>
         </div>
 

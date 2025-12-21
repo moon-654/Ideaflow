@@ -2,8 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
 import { Proposal } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, Filter, Download, TrendingUp, Users, CheckCircle, FileText } from 'lucide-react';
+import { Calendar, Filter, Download, TrendingUp, Users, CheckCircle, FileText, Sparkles, Loader2, Lightbulb } from 'lucide-react';
 import { toast } from 'sonner';
+import { aiService } from '../services/aiService';
 
 type DateFilterType = 'monthly' | 'quarterly' | 'fiscal' | 'custom';
 
@@ -19,6 +20,9 @@ const Report: React.FC = () => {
     const [selectedQuarter, setSelectedQuarter] = useState(Math.ceil((new Date().getMonth() + 1) / 3));
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
+
+    const [aiInsight, setAiInsight] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Date Logic
     const dateRange = useMemo(() => {
@@ -114,6 +118,47 @@ const Report: React.FC = () => {
         };
     }, [filteredProposals, departments]);
 
+    const handleGenerateInsight = async () => {
+        if (!aiService.hasKey()) {
+            toast.error('AI 기능을 사용하려면 프로필에서 API Key를 먼저 등록해주세요.');
+            return;
+        }
+
+        if (stats.total === 0) {
+            toast.error('분석할 데이터가 없습니다.');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            // Prepare lightweight data for AI
+            const analysisData = {
+                period: `${dateRange.start.toLocaleDateString()} ~ ${dateRange.end.toLocaleDateString()}`,
+                totalProposals: stats.total,
+                adoptionRate: stats.adoptionRate + '%',
+                completed: stats.completed,
+                rejected: stats.rejected,
+                topDepartments: stats.deptData.slice(0, 5).map(d => `${d.name} (${d.count})`),
+                trend: stats.trendData.map(t => `${t.date}: ${t.count}`)
+            };
+
+            const response = await aiService.generateReportInsight(analysisData);
+
+            if (response.error) {
+                toast.error(`AI 오류: ${response.error}`);
+                return;
+            }
+
+            setAiInsight(response.text);
+            toast.success('AI 인사이트 분석이 완료되었습니다!');
+        } catch (e) {
+            console.error(e);
+            toast.error('AI 분석 중 오류가 발생했습니다.');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     return (
         <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-12">
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-200 pb-6">
@@ -122,6 +167,14 @@ const Report: React.FC = () => {
                     <p className="text-slate-500 mt-1">제안 활동 및 성과 지표를 분석합니다.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleGenerateInsight}
+                        disabled={isAnalyzing}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg font-bold shadow-md shadow-indigo-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                        {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                        AI 인사이트 분석
+                    </button>
                     <button
                         className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
                         title="엑셀 다운로드 (준비중)"
@@ -146,8 +199,8 @@ const Report: React.FC = () => {
                                 key={type}
                                 onClick={() => setFilterType(type)}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${filterType === type
-                                        ? 'bg-white text-primary shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-700'
+                                    ? 'bg-white text-primary shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 {type === 'monthly' && '월별'}
@@ -223,6 +276,29 @@ const Report: React.FC = () => {
                     조회 기간: <span className="font-bold text-slate-700">{dateRange.start.toLocaleDateString()} ~ {dateRange.end.toLocaleDateString()}</span>
                 </div>
             </div>
+
+            {/* AI Insight Box */}
+            {aiInsight && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-100 shadow-sm animate-fade-in relative">
+                    <button
+                        onClick={() => setAiInsight('')}
+                        className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+                    >
+                        ✕
+                    </button>
+                    <div className="flex items-start gap-4">
+                        <div className="bg-white p-3 rounded-lg shadow-sm text-indigo-600">
+                            <Lightbulb size={24} />
+                        </div>
+                        <div className="space-y-2 flex-1">
+                            <h3 className="text-lg font-bold text-slate-900">AI 경영 인사이트</h3>
+                            <div className="prose prose-sm text-slate-700 max-w-none">
+                                <p className="whitespace-pre-line leading-relaxed">{aiInsight}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

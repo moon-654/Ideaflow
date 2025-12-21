@@ -35,6 +35,30 @@ export interface Grade {
   name: string;
   mileagePoints: number;
   color: string;
+  minScore?: number;  // Minimum score for this grade (e.g., 28 for S)
+  maxScore?: number;  // Maximum score for this grade (e.g., 30 for S)
+  rewardAmount?: number; // Reward amount in KRW
+}
+
+// 2nd Round Evaluation Criteria (5-point scale)
+export interface Evaluation2ndCriteria {
+  id: string;
+  name: string;
+  maxPoints: number; // Typically 5
+  description?: string;
+  labels?: { [score: number]: string }; // e.g., { 5: "아무도 눈치채지 못했다", 1: "모든 사람이 알고 있습니다" }
+}
+
+// Individual reviewer's evaluation record
+export interface ReviewerEvaluation {
+  id: string;
+  reviewerId: string;
+  reviewerName: string;
+  evaluatedAt: string;
+  round: '1st' | '2nd';
+  scores: Record<string, number>; // criteriaId -> score
+  total: number;
+  comment?: string;
 }
 
 export type ProposalStatus =
@@ -61,7 +85,7 @@ export interface Proposal {
   improvementPlan?: string;
   expectedEffect?: string;
 
-  // Evaluation Data
+  // Evaluation Data (Legacy single-reviewer - deprecated)
   deptReviewComment?: string;
   score1st?: {
     [criteriaId: string]: number; // Dynamic criteria scores
@@ -71,6 +95,23 @@ export interface Proposal {
   };
   grade2nd?: string; // Changed to string to support dynamic grades
   rejectReason?: string;
+
+  // Multi-Reviewer Evaluation Data
+  reviews1st?: ReviewerEvaluation[];
+  reviews2nd?: ReviewerEvaluation[];
+  aggregated1st?: {
+    averageScores: Record<string, number>; // Average per criterion
+    averageTotal: number;
+    passed: boolean;
+    reviewerCount: number;
+  };
+  aggregated2nd?: {
+    averageScores: Record<string, number>;
+    averageTotal: number;
+    finalGrade: string;
+    rewardAmount: number;
+    reviewerCount: number;
+  };
 
   // Mileage
   mileageAccrued?: number;
@@ -183,4 +224,17 @@ export interface SettingsState {
   evaluationCriteria: EvaluationCriteria[];
   evaluationCutoff: number; // Minimum score to pass 1st review
   grades: Grade[];
+
+  // 2nd Round Evaluation Criteria (5-point scale)
+  evaluation2ndCriteria: Evaluation2ndCriteria[];
+
+  // Blind Mode Settings
+  blindMode: {
+    evaluator: boolean; // Hide proposer info from evaluators
+    proposer: boolean; // Hide evaluator info from proposers
+  };
+
+  // Required reviewers for grade confirmation (majority = totalReviewers / 2 + 1)
+  totalReviewers1st: number;
+  totalReviewers2nd: number;
 }

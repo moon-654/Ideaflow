@@ -11,30 +11,93 @@ const Profile: React.FC = () => {
 
     // AI Key State
     const [apiKey, setApiKey] = useState('');
+    const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash');
     const [hasKey, setHasKey] = useState(false);
     const [showKeyInput, setShowKeyInput] = useState(false);
+    const [availableModels, setAvailableModels] = useState<string[]>([]);
+    const [validationResults, setValidationResults] = useState<{ model: string, status: 'valid' | 'error', error?: string }[]>([]);
+    const [isCheckingKey, setIsCheckingKey] = useState(false);
+    const [isKeyVerified, setIsKeyVerified] = useState(false); // Verification step completed
 
     useEffect(() => {
         setHasKey(aiService.hasKey());
+        setSelectedModel(aiService.getModel());
     }, []);
 
-    const handleSaveKey = () => {
+    const handleCheckKey = async () => {
         if (!apiKey.trim()) {
             toast.error('API Key를 입력해주세요.');
             return;
         }
+
+        setIsCheckingKey(true);
+        const { valid, results } = await aiService.validateAndGetModels(apiKey.trim());
+        setIsCheckingKey(false);
+        setValidationResults(results);
+
+        if (!valid) {
+            toast.error('유효하지 않은 API Key입니다. (모델 접근 권한 없음)');
+            setIsKeyVerified(false);
+            return;
+        }
+
+        const validModels = results.filter(r => r.status === 'valid').map(r => r.model);
+        setAvailableModels(validModels);
+        setIsKeyVerified(true);
+
+        // Auto-select preference
+        if (validModels.includes('gemini-2.5-flash')) {
+            setSelectedModel('gemini-2.5-flash');
+        } else if (validModels.includes('gemini-1.5-flash')) {
+            setSelectedModel('gemini-1.5-flash');
+        } else if (validModels.length > 0) {
+            setSelectedModel(validModels[0]);
+        }
+
+        toast.success(`API Key 확인 완료! 사용 가능한 모델 ${validModels.length}개를 발견했습니다.`);
+    };
+
+    const handleSaveKey = () => {
+        if (!isKeyVerified) {
+            toast.error('먼저 API Key를 확인해주세요.');
+            return;
+        }
+
         aiService.saveKey(apiKey.trim());
+        aiService.saveModel(selectedModel);
+
         setHasKey(true);
         setApiKey('');
         setShowKeyInput(false);
-        toast.success('Gemini API Key가 저장되었습니다.');
+        setIsKeyVerified(false); // Reset for next time
+        toast.success(`API Key 등록 완료! (모델: ${selectedModel})`);
     };
 
     const handleDeleteKey = () => {
-        if (window.confirm('정말 API Key를 삭제하시겠습니까? 관련 기능을 사용할 수 없게 됩니다.')) {
+        if (window.confirm('정말 API Key와 설정을 삭제하시겠습니까?')) {
+            // Debugging
+            // alert('Before Delete: ' + aiService.getKey());
+
             aiService.removeKey();
+
+            // alert('Deleted.');
+            // alert('After Delete: ' + aiService.getKey());
+
+            // Verify verification
+            if (aiService.hasKey()) {
+                toast.error(`삭제 실패. Key가 남아있습니다: ${aiService.getKey()}`);
+                return;
+            }
+
             setHasKey(false);
-            toast.success('API Key가 삭제되었습니다.');
+            setApiKey('');
+            setSelectedModel('gemini-1.5-flash');
+            setShowKeyInput(false);
+            setIsKeyVerified(false);
+            toast.success('API Key 연동이 해제되었습니다.');
+
+            // Force reload to ensure state clean
+            window.location.reload();
         }
     };
 
@@ -231,20 +294,62 @@ const Profile: React.FC = () => {
                                             value={apiKey}
                                             onChange={(e) => setApiKey(e.target.value)}
                                         />
+
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={handleSaveKey}
-                                                className="flex-1 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700"
+                                                onClick={handleCheckKey}
+                                                disabled={isCheckingKey || isKeyVerified}
+                                                className={`flex-1 py-2 rounded-lg text-sm font-bold disabled:opacity-50 transition-colors
+                                                   ${isKeyVerified
+                                                        ? 'bg-green-100 text-green-700 cursor-default'
+                                                        : 'bg-slate-800 text-white hover:bg-slate-700'}`}
                                             >
-                                                저장
-                                            </button>
-                                            <button
-                                                onClick={() => setShowKeyInput(false)}
-                                                className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200"
-                                            >
-                                                취소
+                                                {isCheckingKey ? '검사 중...' : isKeyVerified ? '검사 완료 (모델 선택)' : '1단계: 유효성 검사 및 모델 검색'}
                                             </button>
                                         </div>
+
+                                        {/* Validation Details (Failures) */}
+                                        {validationResults.length > 0 && !isCheckingKey && (
+                                            <div className="mt-2 space-y-1">
+                                                {validationResults.map(res => (
+                                                    <div key={res.model} className={`text-[10px] flex justify-between items-center px-2 py-1 rounded 
+                                                        ${res.status === 'valid' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                                        <span>{res.model}</span>
+                                                        <span className="font-bold">{res.status === 'valid' ? '사용 가능' : res.error}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {isKeyVerified && (
+                                            <div className="space-y-3 animate-fade-in pt-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-bold text-slate-500">2단계: 사용할 모델 선택</label>
+                                                    <select
+                                                        value={selectedModel}
+                                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                                        className="w-full px-4 py-2 rounded-lg border border-purple-200 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 text-sm bg-white"
+                                                    >
+                                                        {availableModels.map(m => (
+                                                            <option key={m} value={m}>{m} {m === 'gemini-1.5-flash' ? '(기본)' : ''}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <button
+                                                    onClick={handleSaveKey}
+                                                    className="w-full py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 shadow-md shadow-purple-200"
+                                                >
+                                                    최종 저장
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={() => { setShowKeyInput(false); setIsKeyVerified(false); }}
+                                            className="w-full px-4 py-2 bg-white border border-gray-200 text-slate-500 rounded-lg text-sm font-medium hover:bg-slate-50"
+                                        >
+                                            취소
+                                        </button>
                                         <p className="text-xs text-slate-400 text-center">
                                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-600">
                                                 API Key 발급받기

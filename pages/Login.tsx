@@ -74,7 +74,7 @@ const Login: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-2">IdeaFlow</h1>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-2">ACE제안시스템</h1>
                     <p className="text-slate-500">사내 제안 관리 시스템</p>
                 </div>
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState } from '../types';
+import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation } from '../types';
 import { sendInstantNotification } from '../services/notificationService';
 import { MOCK_PROPOSALS, MOCK_MILEAGE_LOGS, CURRENT_USER } from '../constants';
 
@@ -45,6 +45,10 @@ interface ProposalContextType {
     addSystemLog: (log: SystemLog) => void;
     addComment: (proposalId: string, content: string) => void;
     deleteComment: (proposalId: string, commentId: string) => void;
+    // Multi-reviewer evaluation functions
+    addReviewerEvaluation: (proposalId: string, evaluation: ReviewerEvaluation) => void;
+    getReviewerCount: (proposalId: string, round: '1st' | '2nd') => number;
+    hasUserReviewed: (proposalId: string, userId: string, round: '1st' | '2nd') => boolean;
 }
 
 const ProposalContext = createContext<ProposalContextType | undefined>(undefined);
@@ -132,16 +136,39 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 { id: 'marketing', name: '마케팅', color: 'orange' },
             ],
             evaluationCriteria: [
-                { id: 'necessity', name: '필요성', maxPoints: 40, description: '개선 필요성 평가' },
-                { id: 'feasibility', name: '실현성', maxPoints: 60, description: '실현 가능성 평가' },
+                { id: 'effect', name: '기대효과', maxPoints: 25, description: '재무/비재무적 효과 평가' },
+                { id: 'creativity', name: '창의성', maxPoints: 25, description: '아이디어 혁신성 평가' },
+                { id: 'feasibility', name: '실현 가능성', maxPoints: 25, description: '실행 가능성 평가' },
+                { id: 'specificity', name: '제안 구체성', maxPoints: 25, description: '제안 완성도 평가' },
             ],
-            evaluationCutoff: 80,
+            evaluationCutoff: 60, // 100점 만점 기준 60점 이상 통과
             grades: [
-                { id: 'S', name: 'S등급', mileagePoints: 100, color: 'amber' },
-                { id: 'A', name: 'A등급', mileagePoints: 50, color: 'blue' },
-                { id: 'B', name: 'B등급', mileagePoints: 30, color: 'green' },
-                { id: 'C', name: 'C등급', mileagePoints: 10, color: 'slate' },
+                { id: 'S', name: 'S등급', mileagePoints: 100, color: 'amber', minScore: 28, maxScore: 30, rewardAmount: 300000 },
+                { id: 'A', name: 'A등급', mileagePoints: 50, color: 'blue', minScore: 26, maxScore: 27, rewardAmount: 200000 },
+                { id: 'B', name: 'B등급', mileagePoints: 30, color: 'green', minScore: 24, maxScore: 25, rewardAmount: 100000 },
+                { id: 'C', name: 'C등급', mileagePoints: 20, color: 'teal', minScore: 21, maxScore: 23, rewardAmount: 50000 },
+                { id: 'D', name: 'D등급', mileagePoints: 10, color: 'slate', minScore: 16, maxScore: 20, rewardAmount: 20000 },
+                { id: 'P', name: '제안상', mileagePoints: 5, color: 'gray', minScore: 12, maxScore: 15, rewardAmount: 2000 },
             ],
+
+            // 2nd Round Evaluation Criteria (각 5점 만점)
+            evaluation2ndCriteria: [
+                { id: 'insight', name: '착안점', maxPoints: 5, description: '아이디어 착안의 독창성' },
+                { id: 'difficulty', name: '실현의 난이도', maxPoints: 5, description: '구현 난이도 평가' },
+                { id: 'importance', name: '중요성 및 긴급성', maxPoints: 5, description: '중요성과 긴급성의 평균' },
+                { id: 'impact', name: '성과의 크기', maxPoints: 5, description: '예상 효과 금액 기준' },
+                { id: 'efficiency', name: '업무능률 향상', maxPoints: 5, description: '업무 효율성 개선 정도' },
+            ],
+
+            // Blind Mode Settings
+            blindMode: {
+                evaluator: false, // 평가자에게 제안자 정보 숨김
+                proposer: false,  // 제안자에게 평가자 정보 숨김
+            },
+
+            // Required reviewers for grade confirmation (majority rule)
+            totalReviewers1st: 3,
+            totalReviewers2nd: 5,
         };
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -498,6 +525,90 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     };
 
+    // Multi-reviewer evaluation functions
+    const addReviewerEvaluation = (proposalId: string, evaluation: ReviewerEvaluation) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+
+            const round = evaluation.round;
+            const reviewsKey = round === '1st' ? 'reviews1st' : 'reviews2nd';
+            const aggregatedKey = round === '1st' ? 'aggregated1st' : 'aggregated2nd';
+
+            // Add to reviews array
+            const existingReviews = p[reviewsKey] || [];
+            const newReviews = [...existingReviews, evaluation];
+
+            // Calculate aggregated scores
+            const criteriaIds = Object.keys(evaluation.scores);
+            const averageScores: Record<string, number> = {};
+
+            criteriaIds.forEach(criteriaId => {
+                const sum = newReviews.reduce((acc, r) => acc + (r.scores[criteriaId] || 0), 0);
+                averageScores[criteriaId] = Math.round((sum / newReviews.length) * 10) / 10;
+            });
+
+            const averageTotal = Math.round(
+                newReviews.reduce((acc, r) => acc + r.total, 0) / newReviews.length * 10
+            ) / 10;
+
+            if (round === '1st') {
+                const passed = averageTotal >= settings.evaluationCutoff;
+                return {
+                    ...p,
+                    reviews1st: newReviews,
+                    aggregated1st: {
+                        averageScores,
+                        averageTotal,
+                        passed,
+                        reviewerCount: newReviews.length
+                    }
+                };
+            } else {
+                // Determine grade based on score thresholds
+                let finalGrade = 'P';
+                let rewardAmount = 2000;
+
+                for (const grade of settings.grades) {
+                    if (grade.minScore && grade.maxScore) {
+                        if (averageTotal >= grade.minScore && averageTotal <= grade.maxScore) {
+                            finalGrade = grade.id;
+                            rewardAmount = grade.rewardAmount || 0;
+                            break;
+                        }
+                    }
+                }
+
+                return {
+                    ...p,
+                    reviews2nd: newReviews,
+                    aggregated2nd: {
+                        averageScores,
+                        averageTotal,
+                        finalGrade,
+                        rewardAmount,
+                        reviewerCount: newReviews.length
+                    }
+                };
+            }
+        }));
+    };
+
+    const getReviewerCount = (proposalId: string, round: '1st' | '2nd'): number => {
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (!proposal) return 0;
+
+        const reviews = round === '1st' ? proposal.reviews1st : proposal.reviews2nd;
+        return reviews?.length || 0;
+    };
+
+    const hasUserReviewed = (proposalId: string, userId: string, round: '1st' | '2nd'): boolean => {
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (!proposal) return false;
+
+        const reviews = round === '1st' ? proposal.reviews1st : proposal.reviews2nd;
+        return reviews?.some(r => r.reviewerId === userId) || false;
+    };
+
     return (
         <ProposalContext.Provider value={{
             proposals,
@@ -523,7 +634,10 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             addComment,
             deleteComment,
             syncUsersFromOpenProject,
-            syncProjectsFromOpenProject
+            syncProjectsFromOpenProject,
+            addReviewerEvaluation,
+            getReviewerCount,
+            hasUserReviewed
         }}>
             {children}
         </ProposalContext.Provider>

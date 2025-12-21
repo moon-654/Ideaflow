@@ -16,7 +16,7 @@ const STATUS_STEPS = [
 const ProposalDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { proposals, currentUser, addComment, deleteComment } = useProposalStore();
+    const { proposals, currentUser, addComment, deleteComment, settings } = useProposalStore();
     const [newComment, setNewComment] = useState('');
 
     const proposal = proposals.find(p => p.id === id);
@@ -157,6 +157,91 @@ const ProposalDetail: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Evaluation Results Section - For Proposer */}
+            {isMyProposal && (proposal.status === '2nd_Review' || proposal.status === 'Completed' || proposal.status === 'Rejected') && (
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <CheckCircle size={20} className="text-primary" />
+                        심의 평가 결과
+                    </h3>
+
+                    {/* 1차 심의 결과 */}
+                    {(proposal.aggregated1st || proposal.reviews1st?.length) && (
+                        <div className="mb-6">
+                            <h4 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">
+                                📊 1차 심의 결과
+                            </h4>
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm text-blue-600">평균 점수</span>
+                                    <span className={`text-xl font-black ${proposal.aggregated1st?.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                        {proposal.aggregated1st?.averageTotal || proposal.score1st?.total || 0}점
+                                        {proposal.aggregated1st?.passed ? ' (통과)' : ' (미달)'}
+                                    </span>
+                                </div>
+                                {proposal.reviews1st && proposal.reviews1st.length > 0 && (
+                                    <div className="space-y-2 mt-4 pt-4 border-t border-blue-200">
+                                        <p className="text-xs font-bold text-blue-600 uppercase">심사 코멘트</p>
+                                        {proposal.reviews1st.filter(r => r.comment).map((review, idx) => (
+                                            <div key={idx} className="bg-white p-3 rounded border border-blue-100 text-sm">
+                                                <p className="text-slate-700">"{review.comment}"</p>
+                                                <p className="text-xs text-slate-400 mt-1">
+                                                    — {settings.blindMode?.proposer ? `심사자 ${idx + 1}` : review.reviewerName}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2차 심의 결과 */}
+                    {(proposal.aggregated2nd || proposal.reviews2nd?.length) && (
+                        <div>
+                            <h4 className="text-sm font-bold text-purple-700 mb-3 flex items-center gap-2">
+                                🏆 2차 심의 결과
+                            </h4>
+                            <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm text-purple-600">최종 등급</span>
+                                    <div className="text-right">
+                                        <span className="text-xl font-black text-purple-700">
+                                            {proposal.aggregated2nd?.finalGrade || proposal.grade2nd || '-'}
+                                        </span>
+                                        {proposal.aggregated2nd?.rewardAmount && (
+                                            <p className="text-xs text-purple-500">
+                                                포상금: {proposal.aggregated2nd.rewardAmount.toLocaleString('ko-KR')}원
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                {proposal.reviews2nd && proposal.reviews2nd.length > 0 && (
+                                    <div className="space-y-2 mt-4 pt-4 border-t border-purple-200">
+                                        <p className="text-xs font-bold text-purple-600 uppercase">심사 코멘트</p>
+                                        {proposal.reviews2nd.filter(r => r.comment).map((review, idx) => (
+                                            <div key={idx} className="bg-white p-3 rounded border border-purple-100 text-sm">
+                                                <p className="text-slate-700">"{review.comment}"</p>
+                                                <p className="text-xs text-slate-400 mt-1">
+                                                    — {settings.blindMode?.proposer ? `심사자 ${idx + 1}` : review.reviewerName}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* No results yet */}
+                    {!proposal.aggregated1st && !proposal.reviews1st?.length && !proposal.aggregated2nd && !proposal.reviews2nd?.length && (
+                        <p className="text-slate-400 text-sm text-center py-4">
+                            아직 심의 결과가 없습니다.
+                        </p>
+                    )}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Content */}

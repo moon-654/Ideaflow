@@ -192,6 +192,111 @@ const Settings: React.FC = () => {
         )}
 
 
+        {/* Evaluation Settings Section */}
+        {activeTab === 'general' && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-slate-50 flex items-center gap-2">
+              <Shield className="text-purple-500" size={20} />
+              <h3 className="font-bold text-slate-900">심의 설정</h3>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* Blind Mode Toggles */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-3">블라인드 모드</label>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded bg-slate-50 border border-gray-200">
+                    <div>
+                      <span className="font-medium text-slate-700">평가자에게 제안자 숨기기</span>
+                      <p className="text-xs text-slate-400 mt-0.5">심의 시 제안자 이름이 "***"로 표시됩니다</p>
+                    </div>
+                    <button
+                      onClick={() => updateSettings({
+                        blindMode: {
+                          ...settings.blindMode,
+                          evaluator: !settings.blindMode?.evaluator
+                        }
+                      })}
+                      className={`p-1 rounded-full transition-colors ${settings.blindMode?.evaluator ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-400'}`}
+                    >
+                      {settings.blindMode?.evaluator ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded bg-slate-50 border border-gray-200">
+                    <div>
+                      <span className="font-medium text-slate-700">제안자에게 평가자 숨기기</span>
+                      <p className="text-xs text-slate-400 mt-0.5">제안자가 평가 결과 확인 시 평가자 이름이 숨겨집니다</p>
+                    </div>
+                    <button
+                      onClick={() => updateSettings({
+                        blindMode: {
+                          ...settings.blindMode,
+                          proposer: !settings.blindMode?.proposer
+                        }
+                      })}
+                      className={`p-1 rounded-full transition-colors ${settings.blindMode?.proposer ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-400'}`}
+                    >
+                      {settings.blindMode?.proposer ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reviewer Count Settings */}
+              <div className="pt-4 border-t border-gray-100">
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-3">심의위원 인원 설정</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-600">1차 심의위원 수</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={settings.totalReviewers1st || 3}
+                        onChange={(e) => updateSettings({ totalReviewers1st: parseInt(e.target.value) || 3 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
+                      />
+                      <span className="text-sm text-slate-400">명</span>
+                    </div>
+                    <p className="text-xs text-slate-400">과반수({Math.ceil((settings.totalReviewers1st || 3) / 2) + 1}명) 참여 시 확정 가능</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-600">2차 심의위원 수</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={settings.totalReviewers2nd || 5}
+                        onChange={(e) => updateSettings({ totalReviewers2nd: parseInt(e.target.value) || 5 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
+                      />
+                      <span className="text-sm text-slate-400">명</span>
+                    </div>
+                    <p className="text-xs text-slate-400">과반수({Math.ceil((settings.totalReviewers2nd || 5) / 2) + 1}명) 참여 시 확정 가능</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Evaluation Cutoff */}
+              <div className="pt-4 border-t border-gray-100">
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-3">1차 심의 커트라인</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={settings.evaluationCutoff || 60}
+                    onChange={(e) => updateSettings({ evaluationCutoff: parseInt(e.target.value) || 60 })}
+                    className="w-32 px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
+                  />
+                  <span className="text-sm text-slate-400">점 미만 자동 탈락 (100점 만점)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 2. Notification Settings */}
         {activeTab === 'system' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-fit">
