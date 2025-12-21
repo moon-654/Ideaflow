@@ -170,6 +170,7 @@ const DeptReview: React.FC = () => {
 
     // Execution Logic validation
     const currentExecRatio = executionRatios[id] ?? (proposal.executionTeamRatio || 0);
+    const oldExecRatio = proposal.executionTeamRatio || 0;
 
     if (action === 'accept' && currentExecRatio > 0) {
       const members = executionMembers[id] || [];
@@ -200,7 +201,7 @@ const DeptReview: React.FC = () => {
       rejectReason[id] = rejectReason[id] ? `${autoComment}\n\n${rejectReason[id]}` : autoComment;
     }
 
-    if (action === 'accept' || (action === 'accept' && currentExecRatio !== oldExecRatio)) {
+    if (action === 'accept') {
       // If Execution Ratio Changed, we need to adjust Proposer
       const ratioDiff = currentExecRatio - oldExecRatio;
 
@@ -226,14 +227,18 @@ const DeptReview: React.FC = () => {
       // Now Apply Execution Members
       if (currentExecRatio > 0) {
         const members = executionMembers[id] || [];
-        const newExecContributors = members.map(m => ({
-          id: m.id,
-          name: m.name,
-          department: currentUser.department,
-          type: 'Execution' as const,
-          ratio: parseFloat(((m.share / 100) * currentExecRatio).toFixed(1)), // Keep 1 decimal
-          hasAgreed: false
-        }));
+        const newExecContributors = members.map(m => {
+          // Lookup the actual user to get their department
+          const actualUser = users.find(u => u.id === m.id);
+          return {
+            id: m.id,
+            name: m.name,
+            department: actualUser?.department || currentUser.department,
+            type: 'Execution' as const,
+            ratio: parseFloat(((m.share / 100) * currentExecRatio).toFixed(1)),
+            hasAgreed: false
+          };
+        });
 
         // Remove old execution members and add new ones
         updatedContributors = [

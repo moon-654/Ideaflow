@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus, CompletionReport } from '../types';
+import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus, CompletionReport, PayoutBatch } from '../types';
 import { sendInstantNotification } from '../services/notificationService';
 import { MOCK_PROPOSALS, MOCK_MILEAGE_LOGS, CURRENT_USER } from '../constants';
 
@@ -76,8 +76,11 @@ interface ProposalContextType {
     // Completion Report
     submitCompletionReport: (proposalId: string, report: Omit<CompletionReport, 'id'>) => void;
     evaluateCompletionReport: (proposalId: string, recognizedPercentage: number, comment: string) => void;
-    distributeReward: (proposal: Proposal, type: MileageLog['type'], points: number, description: string) => void;
+    distributeReward: (proposal: Proposal, type: MileageLog['type'], totalPoints: number, description: string) => void;
     agreeToContribution: (proposalId: string) => void;
+    addManualMileageLog: (userId: string, points: number, reason: string) => void;
+    voidMileageLog: (logId: string, reason: string) => void;
+    processSelectedPayouts: (logIds: string[]) => string; // Returns new Batch ID
 }
 
 const ProposalContext = createContext<ProposalContextType | undefined>(undefined);
@@ -119,6 +122,15 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const saved = localStorage.getItem('ideaflow_notifications');
         return saved ? JSON.parse(saved) : [];
     });
+
+    const [payoutBatches, setPayoutBatches] = useState<PayoutBatch[]>(() => {
+        const saved = localStorage.getItem('ideaflow_payout_batches');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('ideaflow_payout_batches', JSON.stringify(payoutBatches));
+    }, [payoutBatches]);
 
     const [settings, setSettings] = useState<SettingsState>(() => {
         const saved = localStorage.getItem('ideaflow_settings');
@@ -782,6 +794,25 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     // Unified Comment System
     const distributeReward = (proposal: Proposal, type: MileageLog['type'], totalPoints: number, description: string) => {
+        // Registration points go ONLY to the proposer (simplified)
+        if (type === 'Registration') {
+            addMileageLog({
+                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                userId: proposal.proposer.id,
+                userName: proposal.proposer.name,
+                department: proposal.proposer.department,
+                proposalId: proposal.id,
+                proposalTitle: proposal.title,
+                type: type,
+                points: totalPoints,
+                date: new Date().toISOString().split('T')[0],
+                status: 'Accrued',
+                description: `${description}`
+            });
+            return;
+        }
+
+        // For other types (Dept_Pass, Grades, etc.), distribute based on contribution ratio
         const contributors = proposal.contributors && proposal.contributors.length > 0
             ? proposal.contributors
             : [{ id: proposal.proposer.id, name: proposal.proposer.name, department: proposal.proposer.department, type: 'Proposer' as const, ratio: 100 }];
@@ -790,21 +821,7 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         contributors.forEach(contributor => {
             if (contributor.ratio > 0) {
-                // Determine shares
-                // If points are small (like 1 or 2), simple rounding might result in 0 or > total. 
-                // For small points like Registration(1) or DeptPass(2), maybe duplicates are better? 
-                // Requirement: "Rewards" distributed based on ratio.
-                // Case: 1 point, 3 people (33%). Round(0.33) = 0. No one gets it?
-                // Policy: For small points (< 10), everyone gets the full point? Or Proposer gets main?
-                // User said: "All mileage points... distributed based on contribution ratios".
-                // Let's stick to Math.round logic but ensure minimum 1 if ratio > 0? No, that inflates.
-                // Let's implement robust rounding.
-
                 let share = Math.round(totalPoints * (contributor.ratio / 100));
-
-                // Edge case: If totalPoints is small (e.g. 1 or 2), floating point math might give 0.
-                // If points are very small (e.g. < 5), we might want to give full points to Proposer, or shared?
-                // Let's assume proportional for now. If 0, it's 0.
 
                 if (share > 0) {
                     addMileageLog({
@@ -818,10 +835,69 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                         points: share,
                         date: new Date().toISOString().split('T')[0],
                         status: 'Accrued',
-                        description: `${description} (기여타입: ${contributor.type}, 기여율: ${contributor.ratio}%)`
+                        description: `${description} (기여율: ${contributor.ratio}%)`
                     });
                 }
             }
+        });
+    };
+
+    const addManualMileageLog = (userId: string, points: number, reason: string) => {
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        addMileageLog({
+            id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            userId: user.id,
+            userName: user.name,
+            department: user.department || 'Unknown',
+            type: 'Bonus', // New type needed or re-use? Let's use generic string or add to type mapping
+            points: points,
+            date: new Date().toISOString().split('T')[0],
+            status: 'Accrued',
+            description: reason
+        });
+
+        addSystemLog({
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            user: currentUser.name,
+            action: 'Manual Mileage Adjustment',
+            details: `Admin added ${points} points to ${user.name}. Reason: ${reason}`,
+            level: 'Warning'
+        });
+    };
+
+    const voidMileageLog = (logId: string, reason: string) => {
+        setMileageLogs(prev => prev.map(log =>
+            log.id === logId ? { ...log, status: 'Cancelled', description: `${log.description} (Voided: ${reason})` } : log
+        ));
+
+        const log = mileageLogs.find(l => l.id === logId);
+        if (log) {
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'Mileage Voided',
+                details: `Admin voided log ${logId} (${log.points} pts). Reason: ${reason}`,
+                level: 'Warning'
+            });
+        }
+    };
+
+    const processSelectedPayouts = (logIds: string[]) => {
+        setMileageLogs(prev => prev.map(log =>
+            logIds.includes(log.id) && log.status === 'Accrued' ? { ...log, status: 'Paid' } : log
+        ));
+
+        addSystemLog({
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            user: currentUser.name,
+            action: 'Batch Payout',
+            details: `Admin processed payout for ${logIds.length} transactions.`,
+            level: 'Info'
         });
     };
 
@@ -1280,6 +1356,10 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             updateProposal,
             addMileageLog,
             updateMileageLog,
+            addManualMileageLog,
+            voidMileageLog,
+            processSelectedPayouts,
+            payoutBatches,
             updateSettings,
             setCurrentUser,
             users,

@@ -128,8 +128,8 @@ const Evaluation: React.FC = () => {
     let total = 0;
     criteriaList.forEach(c => {
       const score = scores[c.id] || 0;
-      // 성과의 크기 항목은 2배 적용 체크박스 선택 시 2배
-      if (round === '2nd' && c.id === 'impact' && doubleImpact[proposalId]) {
+      // 성과의 크기 항목은 2배 적용 (기본: true)
+      if (round === '2nd' && c.id === 'impact' && (doubleImpact[proposalId] ?? true)) {
         total += score * 2;
       } else {
         total += score;
@@ -904,32 +904,41 @@ const Evaluation: React.FC = () => {
                         </div>
                       )}
 
-                      {/* 2nd Round Criteria Inputs */}
-                      <div className="grid gap-3">
+                      {/* 2nd Round Criteria Inputs - Button Selection */}
+                      <div className="grid gap-4">
                         {criteria2nd.map(c => (
-                          <div key={c.id}>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                              {c.name} ({c.maxPoints}점){c.id === 'impact' && doubleImpact[prop.id] && <span className="text-purple-600 ml-1">×2</span>}
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              max={c.maxPoints}
-                              value={localScores[prop.id]?.[c.id] || ''}
-                              onChange={(e) => handleLocalScoreChange(prop.id, c.id, e.target.value, c.maxPoints)}
-                              className="w-full text-center font-bold border-gray-300 rounded focus:ring-primary focus:border-primary bg-white text-slate-900"
-                              placeholder="0"
-                            />
+                          <div key={c.id} className="bg-slate-50 p-3 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-bold text-slate-700">
+                                {c.name}
+                                {c.id === 'impact' && doubleImpact[prop.id] && <span className="text-purple-600 ml-1 text-[10px]">×2</span>}
+                              </label>
+                              <span className="text-xs text-slate-400">{localScores[prop.id]?.[c.id] || 0} / {c.maxPoints}점</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map(score => (
+                                <button
+                                  key={score}
+                                  onClick={() => handleLocalScoreChange(prop.id, c.id, String(score), c.maxPoints)}
+                                  className={`flex-1 py-2 rounded text-sm font-bold transition-all ${localScores[prop.id]?.[c.id] === score
+                                    ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                                    : 'bg-white border border-gray-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600'
+                                    }`}
+                                >
+                                  {score}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
 
-                      {/* 성과의 크기 2배 적용 Checkbox */}
+                      {/* 성과의 크기 2배 적용 Checkbox - Default Checked */}
                       <div className="flex items-center gap-2 mt-3 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
                         <input
                           type="checkbox"
                           id={`double-${prop.id}`}
-                          checked={doubleImpact[prop.id] || false}
+                          checked={doubleImpact[prop.id] ?? true}
                           onChange={(e) => setDoubleImpact(prev => ({ ...prev, [prop.id]: e.target.checked }))}
                           className="w-4 h-4 text-yellow-600 rounded focus:ring-yellow-500"
                         />
@@ -957,7 +966,7 @@ const Evaluation: React.FC = () => {
                         <div>
                           <div className="text-xs text-slate-400 uppercase font-bold">내 평가 총점</div>
                           <div className="text-xl font-black text-primary">
-                            {getLocalTotal(prop.id, '2nd')}<span className="text-sm text-slate-300 font-normal">/{totalMaxPoints2nd}</span>
+                            {getLocalTotal(prop.id, '2nd')}<span className="text-sm text-slate-300 font-normal">/30점</span>
                           </div>
                         </div>
                         <button

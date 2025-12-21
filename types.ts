@@ -242,13 +242,24 @@ export interface MileageLog {
   userId: string;
   userName: string;
   department: string;
-  proposalId: string;
-  proposalTitle: string;
-  type: 'Registration' | 'Dept_Pass' | 'Grade_S' | 'Grade_A' | 'Grade_B' | 'Grade_C' | 'Cost_Saving_Reward';
+  proposalId?: string;
+  proposalTitle?: string;
+  type: 'Registration' | 'Dept_Pass' | 'Grade_S' | 'Grade_A' | 'Grade_B' | 'Grade_C' | 'Cost_Saving_Reward' | 'Bonus' | 'Penalty';
   points: number;
   date: string;
-  status: 'Accrued' | 'Paid';
+  status: 'Accrued' | 'Paid' | 'Cancelled';
   description?: string;
+  batchId?: string; // Link to PayoutBatch
+}
+
+export interface PayoutBatch {
+  id: string; // e.g., PO-20231221-01
+  processedBy: string;
+  processedAt: string;
+  totalAmount: number;
+  logCount: number;
+  status: 'Completed';
+  logs: string[]; // IDs of included logs
 }
 
 export interface StatCardProps {

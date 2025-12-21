@@ -31,7 +31,40 @@ export const convertToCSV = (data: Record<string, unknown>[], headers: { key: st
 /**
  * Download a CSV file
  */
-export const downloadCSV = (csvContent: string, filename: string): void => {
+/**
+ * Download a CSV file with "Save As" support
+ */
+export const downloadCSV = async (csvContent: string, defaultFilename: string): Promise<void> => {
+    try {
+        // Try the modern File System Access API
+        // @ts-ignore
+        if (window.showSaveFilePicker) {
+            // @ts-ignore
+            const handle = await window.showSaveFilePicker({
+                suggestedName: defaultFilename,
+                types: [{
+                    description: 'CSV File',
+                    accept: { 'text/csv': ['.csv'] },
+                }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write('\uFEFF' + csvContent); // Add BOM
+            await writable.close();
+            return;
+        }
+    } catch (err: any) {
+        if (err.name === 'AbortError') return; // User cancelled
+        console.warn('File System API failed, falling back.', err);
+    }
+
+    // Fallback: Prompt for filename
+    let filename = defaultFilename;
+    const userInput = prompt('저장할 파일 이름을 입력하세요:', defaultFilename);
+
+    if (userInput === null) return; // User cancelled
+    if (userInput.trim()) filename = userInput.trim();
+    if (!filename.toLowerCase().endsWith('.csv')) filename += '.csv';
+
     // Add BOM for Excel UTF-8 compatibility
     const bom = '\uFEFF';
     const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -50,7 +83,7 @@ export const downloadCSV = (csvContent: string, filename: string): void => {
 /**
  * Export proposals to CSV
  */
-export const exportProposalsToCSV = (proposals: Proposal[], filename?: string): void => {
+export const exportProposalsToCSV = async (proposals: Proposal[], filename?: string): Promise<void> => {
     const headers = [
         { key: 'id', label: '제안번호' },
         { key: 'title', label: '제목' },
@@ -82,7 +115,7 @@ export const exportProposalsToCSV = (proposals: Proposal[], filename?: string): 
         expectedAmount: p.expectedAmount || 0,
         summary: p.summary?.replace(/<[^>]*>/g, '') || '', // Strip HTML
         score1stTotal: p.aggregated1st?.averageTotal || p.score1st?.total || '',
-        score2ndTotal: p.aggregated2nd?.averageTotal || p.score2nd?.total || '',
+        score2ndTotal: p.aggregated2nd?.averageTotal || '',
         grade2nd: p.grade2nd || '',
         mileageAccrued: p.mileageAccrued || 0,
         isArchived: p.isArchived ? 'Y' : 'N',
@@ -91,13 +124,13 @@ export const exportProposalsToCSV = (proposals: Proposal[], filename?: string): 
 
     const csv = convertToCSV(data, headers);
     const timestamp = new Date().toISOString().slice(0, 10);
-    downloadCSV(csv, filename || `proposals_export_${timestamp}.csv`);
+    await downloadCSV(csv, filename || `proposals_export_${timestamp}.csv`);
 };
 
 /**
  * Export mileage logs to CSV
  */
-export const exportMileageLogsToCSV = (logs: MileageLog[], filename?: string): void => {
+export const exportMileageLogsToCSV = async (logs: MileageLog[], filename?: string): Promise<void> => {
     const headers = [
         { key: 'id', label: '로그 ID' },
         { key: 'date', label: '날짜' },
@@ -113,24 +146,24 @@ export const exportMileageLogsToCSV = (logs: MileageLog[], filename?: string): v
     const data = logs.map(log => ({
         id: log.id,
         date: log.date,
-        userName: log.user?.name || '',
-        userDept: log.user?.department || '',
+        userName: log.userName || '',
+        userDept: log.department || '',
         type: log.type,
         points: log.points,
-        proposalId: log.proposal?.id || '',
-        proposalTitle: log.proposal?.title || '',
+        proposalId: log.proposalId || '',
+        proposalTitle: log.proposalTitle || '',
         description: log.description || '',
     }));
 
     const csv = convertToCSV(data, headers);
     const timestamp = new Date().toISOString().slice(0, 10);
-    downloadCSV(csv, filename || `mileage_export_${timestamp}.csv`);
+    await downloadCSV(csv, filename || `mileage_export_${timestamp}.csv`);
 };
 
 /**
  * Export selected proposals to CSV
  */
-export const exportSelectedProposalsToCSV = (proposals: Proposal[], selectedIds: string[]): void => {
+export const exportSelectedProposalsToCSV = async (proposals: Proposal[], selectedIds: string[]): Promise<void> => {
     const selected = proposals.filter(p => selectedIds.includes(p.id));
-    exportProposalsToCSV(selected, `selected_proposals_${new Date().toISOString().slice(0, 10)}.csv`);
+    await exportProposalsToCSV(selected, `selected_proposals_${new Date().toISOString().slice(0, 10)}.csv`);
 };

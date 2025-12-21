@@ -198,8 +198,8 @@ const AdminProposals: React.FC = () => {
                     <p className="text-sm text-slate-500 mt-1">전체 제안의 삭제, 보관, 숨김 등을 관리합니다.</p>
                 </div>
                 <button
-                    onClick={() => {
-                        exportProposalsToCSV(filteredProposals);
+                    onClick={async () => {
+                        await exportProposalsToCSV(filteredProposals);
                         toast.success('CSV 파일이 다운로드되었습니다.');
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -274,8 +274,8 @@ const AdminProposals: React.FC = () => {
                                     <Trash2 size={14} /> 일괄 삭제
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        exportSelectedProposalsToCSV(proposals, Array.from(selectedIds));
+                                    onClick={async () => {
+                                        await exportSelectedProposalsToCSV(proposals, Array.from(selectedIds));
                                         toast.success(`${selectedIds.size}개 제안이 내보내기되었습니다.`);
                                     }}
                                     className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100"
