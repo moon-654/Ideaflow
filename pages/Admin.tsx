@@ -9,6 +9,8 @@ const Admin: React.FC = () => {
 
     // User Management State
     const [newUser, setNewUser] = useState({ name: '', dept: '', role: 'User' });
+    const [userSearch, setUserSearch] = useState('');
+    const [userRoleFilter, setUserRoleFilter] = useState('All');
     const [newDept, setNewDept] = useState({ name: '', managerId: '' });
 
     const handleAddUser = () => {
@@ -102,35 +104,73 @@ const Admin: React.FC = () => {
 
                 {activeTab === 'users' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        {/* Add User Section */}
                         <div className="p-4 bg-slate-50 border-b border-gray-100 flex gap-2">
-                            <input
-                                placeholder="이름"
-                                className="px-3 py-2 border rounded text-sm"
-                                value={newUser.name}
-                                onChange={e => setNewUser({ ...newUser, name: e.target.value })}
-                            />
-                            <input
-                                placeholder="부서"
-                                className="px-3 py-2 border rounded text-sm"
-                                value={newUser.dept}
-                                onChange={e => setNewUser({ ...newUser, dept: e.target.value })}
-                            />
-                            <select
-                                className="px-3 py-2 border rounded text-sm"
-                                value={newUser.role}
-                                onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                            >
-                                <option value="User">일반 사용자</option>
-                                <option value="Reviewer">심사위원</option>
-                                <option value="Admin">관리자</option>
-                            </select>
-                            <button
-                                onClick={handleAddUser}
-                                className="px-4 py-2 bg-primary text-white rounded text-sm font-bold hover:bg-primary-hover"
-                            >
-                                추가
-                            </button>
+                            <div className="flex-1 flex gap-2 items-center">
+                                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">신규 등록:</span>
+                                <input
+                                    placeholder="이름"
+                                    className="px-3 py-2 border rounded text-sm w-32"
+                                    value={newUser.name}
+                                    onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                                />
+                                <input
+                                    placeholder="부서"
+                                    className="px-3 py-2 border rounded text-sm w-32"
+                                    value={newUser.dept}
+                                    onChange={e => setNewUser({ ...newUser, dept: e.target.value })}
+                                />
+                                <select
+                                    className="px-3 py-2 border rounded text-sm"
+                                    value={newUser.role}
+                                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                >
+                                    <option value="User">일반 사용자</option>
+                                    <option value="Reviewer">심사위원</option>
+                                    <option value="Admin">관리자</option>
+                                </select>
+                                <button
+                                    onClick={handleAddUser}
+                                    className="px-4 py-2 bg-primary text-white rounded text-sm font-bold hover:bg-primary-hover flex items-center gap-1"
+                                >
+                                    <Plus size={14} /> 추가
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Search & Filter Section */}
+                        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                            <div className="flex items-center gap-2 max-w-lg w-full">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input
+                                        placeholder="이름, 부서 검색..."
+                                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                        value={userSearch}
+                                        onChange={e => setUserSearch(e.target.value)}
+                                    />
+                                </div>
+                                <select
+                                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                    value={userRoleFilter}
+                                    onChange={e => setUserRoleFilter(e.target.value)}
+                                >
+                                    <option value="All">모든 권한</option>
+                                    <option value="Admin">관리자</option>
+                                    <option value="Reviewer">심사위원</option>
+                                    <option value="User">일반 사용자</option>
+                                    <option value="1차 심의위원">1차 심의위원</option>
+                                    <option value="2차 심의위원">2차 심의위원</option>
+                                </select>
+                            </div>
+                            <div className="text-xs text-slate-500 font-medium">
+                                총 {users.filter(u =>
+                                    (u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.department.toLowerCase().includes(userSearch.toLowerCase())) &&
+                                    (userRoleFilter === 'All' || u.role === userRoleFilter)
+                                ).length}명
+                            </div>
+                        </div>
+
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-gray-200">
                                 <tr>
@@ -142,43 +182,54 @@ const Admin: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {users.map(user => (
-                                    <tr key={user.id} className="hover:bg-slate-50">
-                                        <td className="p-4 font-bold">{user.name}</td>
-                                        <td className="p-4 text-slate-500">{user.department}</td>
-                                        <td className="p-4 text-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={!!user.canDeptReview}
-                                                onChange={(e) => {
-                                                    updateUser(user.id, { canDeptReview: e.target.checked });
-                                                    toast.success(`${user.name}님의 부서 검토 권한이 ${e.target.checked ? '부여' : '해제'}되었습니다.`);
-                                                }}
-                                                className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary cursor-pointer"
-                                            />
-                                        </td>
-                                        <td className="p-4">
-                                            <select
-                                                className={`px-2 py-1 rounded text-xs font-bold border cursor-pointer
+                                {users.filter(u =>
+                                    (u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.department.toLowerCase().includes(userSearch.toLowerCase())) &&
+                                    (userRoleFilter === 'All' || u.role === userRoleFilter)
+                                ).length === 0 ? (
+                                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">검색 결과가 없습니다.</td></tr>
+                                ) : (
+                                    users.filter(u =>
+                                        (u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.department.toLowerCase().includes(userSearch.toLowerCase())) &&
+                                        (userRoleFilter === 'All' || u.role === userRoleFilter)
+                                    ).map(user => (
+                                        <tr key={user.id} className="hover:bg-slate-50">
+                                            <td className="p-4 font-bold">{user.name}</td>
+                                            <td className="p-4 text-slate-500">{user.department}</td>
+                                            <td className="p-4 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!user.canDeptReview}
+                                                    onChange={(e) => {
+                                                        updateUser(user.id, { canDeptReview: e.target.checked });
+                                                        toast.success(`${user.name}님의 부서 검토 권한이 ${e.target.checked ? '부여' : '해제'}되었습니다.`);
+                                                    }}
+                                                    className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary cursor-pointer"
+                                                />
+                                            </td>
+                                            <td className="p-4">
+                                                <select
+                                                    className={`px-2 py-1 rounded text-xs font-bold border cursor-pointer
                                                     ${user.role === 'Admin' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                        user.role === 'Reviewer' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                            'bg-blue-50 text-blue-700 border-blue-200'}
+                                                            user.role === 'Reviewer' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                                'bg-blue-50 text-blue-700 border-blue-200'}
                                                 `}
-                                                value={user.role}
-                                                onChange={(e) => handleRoleChange(user.id, e.target.value, user.name)}
-                                            >
-                                                <option value="User">일반 사용자</option>
-                                                <option value="Reviewer">심사위원</option>
-                                                <option value="Admin">관리자</option>
-                                            </select>
-                                        </td>
-                                        <td className="p-4 text-center">
-                                            <button onClick={() => removeUser(user.id)} className="text-slate-400 hover:text-red-500">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                    value={user.role}
+                                                    onChange={(e) => handleRoleChange(user.id, e.target.value, user.name)}
+                                                >
+                                                    <option value="User">일반 사용자</option>
+                                                    <option value="Reviewer">심사위원</option>
+                                                    <option value="Admin">관리자</option>
+                                                    <option value="1차 심의위원">1차 심의위원</option>
+                                                    <option value="2차 심의위원">2차 심의위원</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <button onClick={() => removeUser(user.id)} className="text-slate-400 hover:text-red-500">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )))}
                             </tbody>
                         </table>
                     </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, ChevronDown, DollarSign, Sparkles, Loader2 } from 'lucide-react';
+import { UploadCloud, ChevronDown, DollarSign, Sparkles, Loader2, Users, Trash2 } from 'lucide-react';
 import { useProposalStore } from '../context/ProposalContext';
 import { useNavigate } from 'react-router-dom';
 import { Proposal } from '../types';
@@ -10,7 +10,7 @@ import { aiService } from '../services/aiService';
 
 const ProposalSubmit: React.FC = () => {
   const navigate = useNavigate();
-  const { addProposal, currentUser, departments, settings, proposals } = useProposalStore();
+  const { addProposal, currentUser, departments, settings, proposals, users } = useProposalStore();
 
   const [category, setCategory] = useState('');
   const [title, setTitle] = useState('');
@@ -22,6 +22,92 @@ const ProposalSubmit: React.FC = () => {
 
   const [isRefining, setIsRefining] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+
+  // Contribution State
+  const [contributors, setContributors] = useState<any[]>([
+    { id: currentUser.id, name: currentUser.name, department: currentUser.department, type: 'Proposer', ratio: 70, hasAgreed: true },
+    { id: 'execution-team', name: '실행 부서 (미정)', department: '-', type: 'Execution', ratio: 30, hasAgreed: false }
+  ]);
+
+  const addCoAuthor = (user: any) => {
+    setContributors(prev => [
+      ...prev.filter(c => c.type !== 'Execution'), // remove execution momentarily to append before it? No, execution usually last.
+      // Actually simpler: just push co-author in middle
+      { id: user.id, name: user.name, department: user.department, type: 'CoAuthor', ratio: 0, hasAgreed: false },
+      ...prev.filter(c => c.type === 'Execution')
+    ]);
+  };
+
+  const removeCoAuthor = (id: string) => {
+    setContributors(prev => prev.filter(c => c.id !== id));
+  };
+
+  const updateContributorRatio = (id: string, newRatio: number) => {
+    // Clamp value between 0 and 100
+    const clampedRatio = Math.max(0, Math.min(100, newRatio));
+
+    setContributors(prev => {
+      const target = prev.find(c => c.id === id);
+      if (!target) return prev;
+      if (target.ratio === clampedRatio) return prev;
+
+      const others = prev.filter(c => c.id !== id);
+      const currentOthersTotal = others.reduce((sum, c) => sum + c.ratio, 0);
+      const targetRemaining = 100 - clampedRatio;
+
+      // Scenario 1: Others have 0 total ratio.
+      if (currentOthersTotal === 0) {
+        let victim = others.find(c => c.type === 'Proposer');
+        if (!victim && id !== 'execution-team') victim = others.find(c => c.type === 'Execution');
+        if (!victim) victim = others[0];
+
+        if (victim) {
+          return prev.map(c => {
+            if (c.id === id) return { ...c, ratio: clampedRatio };
+            if (c.id === victim!.id) return { ...c, ratio: targetRemaining };
+            return c;
+          });
+        }
+        return prev.map(c => c.id === id ? { ...c, ratio: clampedRatio } : c);
+      }
+
+      // Scenario 2: Proportional Distribution
+      const scale = targetRemaining / currentOthersTotal;
+
+      let distributed = 0;
+      const newContributors = prev.map(c => {
+        if (c.id === id) return { ...c, ratio: clampedRatio };
+
+        const newVal = Math.floor(c.ratio * scale);
+        if (c.id !== id) distributed += newVal;
+
+        return { ...c, ratio: newVal };
+      });
+
+      // Handle Rounding Errors
+      const newSum = clampedRatio + distributed;
+      const remainder = 100 - newSum;
+
+      if (remainder !== 0) {
+        const bestFit = newContributors.find(c => c.id !== id && c.type === 'Proposer')
+          || newContributors.find(c => c.id !== id && c.type === 'Execution')
+          || newContributors.find(c => c.id !== id);
+
+        if (bestFit) {
+          bestFit.ratio += remainder;
+        }
+      }
+
+      return newContributors;
+    });
+  };
+
+  // Update execution team name when dept selected
+  React.useEffect(() => {
+    if (targetDepartment) {
+      setContributors(prev => prev.map(c => c.type === 'Execution' ? { ...c, name: `${targetDepartment} (실행)` } : c));
+    }
+  }, [targetDepartment]);
 
   // Format number with commas
   const formatAmount = (value: string) => {
@@ -76,7 +162,18 @@ const ProposalSubmit: React.FC = () => {
       improvementPlan,
       expectedEffect,
       expectedAmount: parseAmount(expectedAmount),
+      contributors: settings.contribution?.enabled ? contributors : undefined,
+      executionTeamRatio: settings.contribution?.enabled ? contributors.find(c => c.type === 'Execution')?.ratio : undefined
     };
+
+    // Contribution Validation
+    if (settings.contribution?.enabled) {
+      const total = contributors.reduce((acc, c) => acc + c.ratio, 0);
+      if (total !== 100) {
+        toast.error(`기여율 합계는 정확히 100%여야 합니다. (현재: ${total}%)`);
+        return;
+      }
+    }
 
     addProposal(newProposal);
     toast.success('제안이 성공적으로 등록되었습니다.');
@@ -264,6 +361,97 @@ const ProposalSubmit: React.FC = () => {
           </div>
 
           <hr className="border-gray-100" />
+
+          {/* Contribution Management Section */}
+          {settings.contribution?.enabled && (
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Users size={20} className="text-indigo-600" />
+                    공동 제안 및 기여도 설정
+                  </h3>
+                  <p className="text-sm text-slate-500">제안자, 공동 제안자, 그리고 실행 부서의 기여도를 설정합니다. (총합 100%)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold ${contributors.reduce((acc, c) => acc + c.ratio, 0) === 100 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    합계: {contributors.reduce((acc, c) => acc + c.ratio, 0)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {contributors.map((contributor) => (
+                  <div key={contributor.id} className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <div className="w-1/3">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${contributor.type === 'Proposer' ? 'bg-blue-100 text-blue-700' : contributor.type === 'Execution' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {contributor.type === 'Proposer' ? '제안자' : contributor.type === 'Execution' ? '실행부서' : '공동제안자'}
+                        </span>
+                        <span className="font-bold text-slate-800">{contributor.name}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 pl-1">{contributor.department}</div>
+                    </div>
+
+                    <div className="flex-1 flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={contributor.ratio}
+                        onChange={(e) => updateContributorRatio(contributor.id, parseInt(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex items-center gap-1 w-20">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={contributor.ratio}
+                          onChange={(e) => updateContributorRatio(contributor.id, parseInt(e.target.value))}
+                          className="w-16 px-2 py-1 text-right border border-gray-300 rounded font-bold text-indigo-600"
+                        />
+                        <span className="text-sm text-slate-500">%</span>
+                      </div>
+                    </div>
+
+                    {contributor.type === 'CoAuthor' && (
+                      <button
+                        onClick={() => removeCoAuthor(contributor.id)}
+                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add Co-Author Button */}
+                {(contributors.filter(c => c.type === 'CoAuthor').length < (settings.contribution?.maxCoAuthors || 3)) && (
+                  <div className="relative">
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const user = users.find(u => u.id === e.target.value);
+                          if (user) addCoAuthor(user);
+                          e.target.value = '';
+                        }
+                      }} // logic handled in state updates
+                      className="w-full h-10 pl-3 pr-8 rounded-lg border border-dashed border-gray-300 text-sm bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+                    >
+                      <option value="">+ 공동 제안자 추가</option>
+                      {users
+                        .filter(u => u.id !== currentUser.id && !contributors.find(c => c.id === u.id))
+                        .map(u => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.department})</option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* AI Assist Bar */}
           <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 flex items-center justify-between">

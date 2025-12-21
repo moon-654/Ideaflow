@@ -1,11 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UploadCloud, ChevronDown, DollarSign, Sparkles, Loader2 } from 'lucide-react';
-import { useProposalStore } from '../context/ProposalContext';
-import { useNavigate, useParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import RichTextEditor from '../components/RichTextEditor';
-import { stripHtml } from '../utils/html';
-import { aiService } from '../services/aiService';
+import { Contributor } from '../types'; // Ensure imported
+import { UploadCloud, ChevronDown, DollarSign, Sparkles, Loader2, Users, Trash2, Search } from 'lucide-react';
 
 const ProposalEdit: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -19,7 +13,9 @@ const ProposalEdit: React.FC = () => {
     const [improvementPlan, setImprovementPlan] = useState('');
     const [expectedEffect, setExpectedEffect] = useState('');
     const [expectedAmount, setExpectedAmount] = useState<string>('');
-    const [coAuthors, setCoAuthors] = useState<{ id: string; name: string; department: string }[]>([]);
+    // const [coAuthors, setCoAuthors] = useState<{ id: string; name: string; department: string }[]>([]); // Deprecated/Synced
+    const [contributors, setContributors] = useState<Contributor[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const [isRefining, setIsRefining] = useState(false);
 
@@ -43,11 +39,110 @@ const ProposalEdit: React.FC = () => {
         return parseInt(formatted.replace(/,/g, ''), 10);
     };
 
+    // Contribution Management Handlers
+    const addCoAuthor = (user: { id: string; name: string; department: string }) => {
+        setContributors(prev => {
+            // Check if already exists
+            if (prev.find(c => c.id === user.id)) return prev;
+
+            const newContributor = {
+                id: user.id,
+                name: user.name,
+                department: user.department,
+                type: 'CoAuthor' as const,
+                ratio: 0,
+                hasAgreed: false
+            };
+            return [...prev, newContributor];
+        });
+        setSearchTerm(''); // Clear search after adding
+    };
+
+    const removeCoAuthor = (userId: string) => {
+        setContributors(prev => {
+            const removed = prev.find(c => c.id === userId);
+            const remaining = prev.filter(c => c.id !== userId);
+            if (removed && removed.ratio > 0) {
+                // Return ratio to Proposer by default when removing
+                return remaining.map(c =>
+                    c.type === 'Proposer' ? { ...c, ratio: c.ratio + removed.ratio } : c
+                );
+            }
+            return remaining;
+        });
+    };
+
+    const [isAutoBalance, setIsAutoBalance] = useState(true);
+
+    const updateContributorRatio = (userId: string, newRatio: number) => {
+        // Clamp value between 0 and 100
+        const clampedRatio = Math.max(0, Math.min(100, newRatio));
+
+        setContributors(prev => {
+            if (!isAutoBalance) {
+                // Manual Mode: Just update the target
+                return prev.map(c => c.id === userId ? { ...c, ratio: clampedRatio } : c);
+            }
+
+            const target = prev.find(c => c.id === userId);
+            if (!target) return prev;
+            if (target.ratio === clampedRatio) return prev;
+
+            const others = prev.filter(c => c.id !== userId);
+            const currentOthersTotal = others.reduce((sum, c) => sum + c.ratio, 0);
+            const targetRemaining = 100 - clampedRatio;
+
+            // Scenario 1: Others have 0 total ratio.
+            if (currentOthersTotal === 0) {
+                let victim = others.find(c => c.type === 'Proposer');
+                if (!victim && userId !== 'execution-team-placeholder') victim = others.find(c => c.type === 'Execution');
+                if (!victim) victim = others[0];
+
+                if (victim) {
+                    return prev.map(c => {
+                        if (c.id === userId) return { ...c, ratio: clampedRatio };
+                        if (c.id === victim!.id) return { ...c, ratio: targetRemaining };
+                        return c;
+                    });
+                }
+                return prev.map(c => c.id === userId ? { ...c, ratio: clampedRatio } : c);
+            }
+
+            // Scenario 2: Proportional Distribution
+            const scale = targetRemaining / currentOthersTotal;
+
+            let distributed = 0;
+            const newContributors = prev.map(c => {
+                if (c.id === userId) return { ...c, ratio: clampedRatio };
+
+                const newVal = Math.floor(c.ratio * scale);
+                if (c.id !== userId) distributed += newVal;
+
+                return { ...c, ratio: newVal };
+            });
+
+            // Handle Rounding Errors (Ensure Sum is 100)
+            const newSum = clampedRatio + distributed;
+            const remainder = 100 - newSum;
+
+            if (remainder !== 0) {
+                const bestFit = newContributors.find(c => c.id !== userId && c.type === 'Proposer')
+                    || newContributors.find(c => c.id !== userId && c.type === 'Execution')
+                    || newContributors.find(c => c.id !== userId);
+
+                if (bestFit) {
+                    bestFit.ratio += remainder;
+                }
+            }
+
+            return newContributors;
+        });
+    };
+
     useEffect(() => {
         const proposal = proposals.find(p => p.id === id);
         if (proposal) {
             // Verify ownership
-            // Verify ownership (allow proposer, co-authors, and admins)
             const isCoAuthor = proposal.coAuthors?.some(a => a.id === currentUser.id);
             const canEdit = proposal.proposer.id === currentUser.id || isCoAuthor || currentUser.role === 'Admin';
 
@@ -64,7 +159,52 @@ const ProposalEdit: React.FC = () => {
             setImprovementPlan(proposal.improvementPlan || '');
             setExpectedEffect(proposal.expectedEffect || '');
             setExpectedAmount(formatAmount(proposal.expectedAmount));
-            setCoAuthors(proposal.coAuthors || []);
+            // setCoAuthors(proposal.coAuthors || []);
+
+            // Initialize Contributors
+            if (proposal.contributors && proposal.contributors.length > 0) {
+                setContributors(proposal.contributors);
+            } else {
+                // Migration existing coAuthors or just Proposer + Exec defaults
+                const initialContributors: Contributor[] = [
+                    {
+                        id: proposal.proposer.id,
+                        name: proposal.proposer.name,
+                        department: proposal.proposer.department,
+                        type: 'Proposer',
+                        ratio: 70,
+                        hasAgreed: false
+                    }
+                ];
+
+                if (proposal.coAuthors) {
+                    proposal.coAuthors.forEach(ca => {
+                        initialContributors.push({
+                            id: ca.id,
+                            name: ca.name,
+                            department: ca.department,
+                            type: 'CoAuthor',
+                            ratio: 0, // Default 0 for migration, user must adjust
+                            hasAgreed: false
+                        });
+                    });
+                }
+
+                // Add Execution Team placeholder if not present?
+                // Actually settings might not be enabled yet, but if editing we should check settings?
+                // Logic: If feature is enabled, ensure Execution Team exists.
+                initialContributors.push({
+                    id: 'execution-team-placeholder',
+                    name: '실행 부서',
+                    department: proposal.targetDepartment || '실행 부서',
+                    type: 'Execution',
+                    ratio: 30,
+                    hasAgreed: false
+                });
+
+                setContributors(initialContributors);
+            }
+
         } else {
             toast.error('제안을 찾을 수 없습니다.');
             navigate('/');
@@ -81,7 +221,23 @@ const ProposalEdit: React.FC = () => {
             return;
         }
 
+        // Validate Contribution
+        if (settings.contribution.enabled) {
+            const totalRatio = contributors.reduce((acc, c) => acc + c.ratio, 0);
+            if (totalRatio !== 100) {
+                toast.error(`기여도 합계는 100%여야 합니다. (현재: ${totalRatio}%)`);
+                return;
+            }
+        }
+
         if (!id) return;
+
+        // Sync contributors to coAuthors for backward compatibility
+        const coAuthorsList = contributors
+            .filter(c => c.type === 'CoAuthor')
+            .map(c => ({ id: c.id, name: c.name, department: c.department }));
+
+        const executionRatio = contributors.find(c => c.type === 'Execution')?.ratio || 0;
 
         updateProposal(id, {
             title,
@@ -92,7 +248,9 @@ const ProposalEdit: React.FC = () => {
             improvementPlan,
             expectedEffect,
             expectedAmount: parseAmount(expectedAmount),
-            coAuthors,
+            coAuthors: coAuthorsList,
+            contributors: contributors, // Save Full Contributors
+            executionTeamRatio: executionRatio,
             status: 'Dept_Review',
             deptReviewComment: ''
         });
@@ -251,53 +409,119 @@ const ProposalEdit: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Co-Authorship Selection */}
-                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                            👥 공동 작성자
-                        </h3>
-                        <div className="space-y-4">
-                            <select
-                                className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-primary focus:border-primary text-sm"
-                                onChange={(e) => {
-                                    const selectedId = e.target.value;
-                                    if (!selectedId) return;
-                                    const user = users.find(u => u.id === selectedId);
-                                    if (user && !coAuthors.find(a => a.id === user.id) && user.id !== currentUser.id) {
-                                        setCoAuthors([...coAuthors, { id: user.id, name: user.name, department: user.department }]);
-                                    }
-                                    e.target.value = '';
-                                }}
-                            >
-                                <option value="">공동 작성자 추가...</option>
-                                {users
-                                    .filter(u => u.id !== currentUser.id && !coAuthors.find(a => a.id === u.id))
-                                    .map(user => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.name} ({user.department})
-                                        </option>
-                                    ))
-                                }
-                            </select>
+                    {/* Contribution Management Section */}
+                    {settings.contribution?.enabled && (
+                        <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                        <Users size={20} className="text-indigo-600" />
+                                        공동 제안 및 기여도 설정
+                                    </h3>
+                                    <p className="text-sm text-slate-500">제안자, 공동 제안자, 그리고 실행 부서의 기여도를 설정합니다. (총합 100%)</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className={`px-3 py-1 rounded-full text-xs font-bold ${contributors.reduce((acc, c) => acc + c.ratio, 0) === 100 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        합계: {contributors.reduce((acc, c) => acc + c.ratio, 0)}%
+                                    </div>
+                                </div>
+                            </div>
 
-                            <div className="flex flex-wrap gap-2">
-                                {coAuthors.map(author => (
-                                    <div key={author.id} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-medium text-slate-700">
-                                        <span>{author.name} ({author.department})</span>
-                                        <button
-                                            onClick={() => setCoAuthors(coAuthors.filter(a => a.id !== author.id))}
-                                            className="text-slate-400 hover:text-red-500 transition-colors"
-                                        >
-                                            &times;
-                                        </button>
+                            <div className="space-y-4">
+                                {contributors.map((contributor) => (
+                                    <div key={contributor.id} className="flex items-center gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                        <div className="w-1/3">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${contributor.type === 'Proposer' ? 'bg-blue-100 text-blue-700' : contributor.type === 'Execution' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'}`}>
+                                                    {contributor.type === 'Proposer' ? '제안자' : contributor.type === 'Execution' ? '실행부서' : '공동제안자'}
+                                                </span>
+                                                <span className="font-bold text-slate-800">{contributor.name}</span>
+                                            </div>
+                                            <div className="text-xs text-slate-500 mt-1 pl-1">{contributor.department}</div>
+                                        </div>
+
+                                        <div className="flex-1 flex items-center gap-4">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="100"
+                                                step="5"
+                                                value={contributor.ratio}
+                                                onChange={(e) => updateContributorRatio(contributor.id, parseInt(e.target.value))}
+                                                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                            />
+                                            <div className="flex items-center gap-1 w-20">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={contributor.ratio}
+                                                    onChange={(e) => updateContributorRatio(contributor.id, parseInt(e.target.value))}
+                                                    className="w-16 px-2 py-1 text-right border border-gray-300 rounded font-bold text-indigo-600"
+                                                />
+                                                <span className="text-sm text-slate-500">%</span>
+                                            </div>
+                                        </div>
+
+                                        {contributor.type === 'CoAuthor' && (
+                                            <button
+                                                onClick={() => removeCoAuthor(contributor.id)}
+                                                className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
-                                {coAuthors.length === 0 && (
-                                    <p className="text-xs text-slate-400 italic">공동 작성자가 없습니다.</p>
+
+                                {/* Add Co-Author Searchable Input */}
+                                {(contributors.filter(c => c.type === 'CoAuthor').length < (settings.contribution?.maxCoAuthors || 3)) && (
+                                    <div className="relative">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                            <input
+                                                type="text"
+                                                placeholder="이름으로 참여자 검색..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full h-10 pl-10 pr-4 rounded-lg border border-dashed border-gray-300 text-sm bg-slate-50 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                                            />
+                                        </div>
+
+                                        {searchTerm && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-xl z-20 max-h-60 overflow-y-auto">
+                                                {users
+                                                    .filter(u =>
+                                                        u.id !== currentUser.id &&
+                                                        !contributors.find(c => c.id === u.id) &&
+                                                        (u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.department.includes(searchTerm))
+                                                    )
+                                                    .map(u => (
+                                                        <button
+                                                            key={u.id}
+                                                            onClick={() => addCoAuthor(u)}
+                                                            className="w-full px-4 py-2 text-left hover:bg-indigo-50 flex items-center justify-between group transition-colors"
+                                                        >
+                                                            <div>
+                                                                <span className="font-bold text-slate-800">{u.name}</span>
+                                                                <span className="text-xs text-slate-500 ml-2">{u.department}</span>
+                                                            </div>
+                                                            <span className="text-xs text-indigo-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity">추가</span>
+                                                        </button>
+                                                    ))
+                                                }
+                                                {users.filter(u => u.id !== currentUser.id && !contributors.find(c => c.id === u.id) && (u.name.includes(searchTerm) || u.department.includes(searchTerm))).length === 0 && (
+                                                    <div className="px-4 py-3 text-sm text-slate-400 text-center italic">
+                                                        검색 결과가 없습니다.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
-                    </div>
+                    )}
                     <div className="space-y-2">
                         <label className="block text-sm font-bold text-slate-900">현황 및 문제점</label>
                         <RichTextEditor

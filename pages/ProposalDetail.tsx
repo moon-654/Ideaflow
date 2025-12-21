@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, User, Tag, CheckCircle, Clock, AlertCircle, FileTe
 import { toast } from 'sonner';
 import DOMPurify from 'dompurify';
 import { extractMentions, filterUsersForMention, getCurrentMentionQuery, renderWithMentions } from '../utils/mentionUtils';
+import CompletionReportModal from '../components/CompletionReportModal'; // [NEW]
 
 const STATUS_STEPS = [
     { id: 'New', label: '신규 등록' },
@@ -17,12 +18,13 @@ const STATUS_STEPS = [
 const ProposalDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { proposals, currentUser, addComment, deleteComment, settings, addUnifiedComment, replyToComment, users, addNotification } = useProposalStore();
+    const { proposals, currentUser, addComment, deleteComment, settings, addUnifiedComment, replyToComment, users, addNotification, submitCompletionReport, agreeToContribution } = useProposalStore();
     const [newComment, setNewComment] = useState('');
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
     const [replyContent, setReplyContent] = useState('');
     const [mentionQuery, setMentionQuery] = useState<string | null>(null);
     const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+    const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false); // [NEW]
     const commentInputRef = useRef<HTMLInputElement>(null);
 
     const proposal = proposals.find(p => p.id === id);
@@ -125,6 +127,14 @@ const ProposalDetail: React.FC = () => {
         });
     };
 
+    const handleSubmitReport = (data: { actualSavingAmount: number; evidenceDescription: string; evidenceAttachments: string[] }) => {
+        if (!proposal) return;
+        submitCompletionReport(proposal.id, {
+            ...data,
+            status: 'Pending'
+        });
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-10">
             {/* Header & Navigation */}
@@ -138,8 +148,8 @@ const ProposalDetail: React.FC = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
                         {proposal.title}
-                        <span className="text-sm font-normal text-slate-400 px-2 py-1 bg-slate-100 rounded-md">
-                            {proposal.id}
+                        <span className="text-sm font-normal text-slate-500 px-2 py-1 bg-slate-100 rounded-md border border-slate-200 font-mono">
+                            {proposal.proposalNumber || proposal.id}
                         </span>
                     </h1>
                 </div>
@@ -297,6 +307,177 @@ const ProposalDetail: React.FC = () => {
                         <p className="text-slate-400 text-sm text-center py-4">
                             아직 심의 결과가 없습니다.
                         </p>
+                    )}
+                </div>
+            )}
+
+            {/* [NEW] Contribution Agreement Section */}
+            {settings.contribution.enabled && proposal.contributors && proposal.contributors.length > 0 && proposal.status === 'Completed' && (
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <User size={20} className="text-indigo-600" />
+                        기여도 합의 및 확인
+                    </h3>
+
+                    <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-4">
+                        <p className="text-sm text-indigo-700 mb-2 font-bold">
+                            ⚠️ 최종 성과 보상 지급을 위해 모든 기여자의 합의가 필요합니다.
+                        </p>
+                        <p className="text-xs text-indigo-600">
+                            본인의 기여도를 확인하고 합의 버튼을 눌러주세요. 모든 참여자가 합의해야 최종 보상이 지급 절차가 진행됩니다.
+                        </p>
+                    </div>
+
+                    <div className="overflow-hidden rounded-lg border border-gray-200">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-slate-500 font-bold uppercase text-xs">
+                                <tr>
+                                    <th className="px-4 py-3">참여자</th>
+                                    <th className="px-4 py-3">소속</th>
+                                    <th className="px-4 py-3">역할</th>
+                                    <th className="px-4 py-3 text-right">기여율</th>
+                                    <th className="px-4 py-3 text-center">합의 여부</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {proposal.contributors.map(contributor => {
+                                    const isMe = contributor.id === currentUser.id;
+                                    return (
+                                        <tr key={contributor.id} className={isMe ? 'bg-indigo-50/30' : ''}>
+                                            <td className="px-4 py-3 font-medium text-slate-900 flex items-center gap-2">
+                                                {contributor.name}
+                                                {isMe && <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">ME</span>}
+                                            </td>
+                                            <td className="px-4 py-3 text-slate-500">{contributor.department}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`text-xs px-2 py-1 rounded font-bold ${contributor.type === 'Proposer' ? 'bg-blue-100 text-blue-700' :
+                                                    contributor.type === 'Execution' ? 'bg-green-100 text-green-700' :
+                                                        'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                    {contributor.type === 'Proposer' ? '제안자' :
+                                                        contributor.type === 'Execution' ? '실행 담당' : '공동 제안'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-bold text-slate-900">{contributor.ratio}%</td>
+                                            <td className="px-4 py-3 text-center">
+                                                {contributor.hasAgreed ? (
+                                                    <span className="inline-flex items-center gap-1 text-green-600 font-bold text-xs">
+                                                        <CheckCircle size={14} /> 합의 완료
+                                                    </span>
+                                                ) : isMe ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (window.confirm('기여도 비율에 동의하고 합의하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                                                                agreeToContribution(proposal.id);
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                                                    >
+                                                        동의하기
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-slate-400 text-xs italic">대기 중</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* [NEW] Completion Report Section */}
+            {(proposal.status === 'Completed') && (
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <CheckCircle size={20} className="text-green-600" />
+                        제안 완료 보고서
+                    </h3>
+
+                    {!proposal.completionReport ? (
+                        /* No Report Yet */
+                        <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-gray-200">
+                            {isMyProposal ? (
+                                <div className="space-y-4">
+                                    <p className="text-slate-600 font-medium">제안 실행이 완료되었나요?<br />완료 보고서를 제출하고 성과 보상을 받으세요.</p>
+                                    <button
+                                        onClick={() => setIsCompletionModalOpen(true)}
+                                        className="px-6 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 active:scale-95"
+                                    >
+                                        완료 보고서 제출하기
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-slate-400">아직 완료 보고서가 제출되지 않았습니다.</p>
+                            )}
+                        </div>
+                    ) : (
+                        /* Report Exists */
+                        <div className="space-y-6">
+                            <div className={`p-4 rounded-lg border border-l-4 ${proposal.completionReport.status === 'Approved' ? 'bg-green-50 border-green-200 border-l-green-500' :
+                                proposal.completionReport.status === 'Rejected' ? 'bg-red-50 border-red-200 border-l-red-500' :
+                                    'bg-yellow-50 border-yellow-200 border-l-yellow-500'
+                                }`}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${proposal.completionReport.status === 'Approved' ? 'bg-green-200 text-green-800' :
+                                                proposal.completionReport.status === 'Rejected' ? 'bg-red-200 text-red-800' :
+                                                    'bg-yellow-200 text-yellow-800'
+                                                }`}>
+                                                {proposal.completionReport.status === 'Pending' ? '심사 중' :
+                                                    proposal.completionReport.status === 'Approved' ? '승인됨 (성과 인정)' : '반려됨'}
+                                            </span>
+                                            <span className="text-xs text-slate-400">
+                                                제출일: {proposal.completionReport.reviewedAt ? new Date(proposal.completionReport.reviewedAt).toLocaleDateString() : '제출됨'}
+                                            </span>
+                                        </div>
+                                        <p className="font-bold text-slate-900 text-lg">
+                                            연간 절감액: {proposal.completionReport.actualSavingAmount.toLocaleString()}원
+                                        </p>
+                                    </div>
+                                    {proposal.completionReport.status === 'Approved' && proposal.completionReport.finalRecognizedAmount && (
+                                        <div className="text-right">
+                                            <span className="text-xs text-slate-500 block">최종 인정 금액 ({proposal.completionReport.recognizedPercentage}%)</span>
+                                            <span className="font-black text-xl text-green-700">
+                                                {(proposal.completionReport.finalRecognizedAmount * 3).toLocaleString()} <span className="text-sm font-normal text-slate-500">원 (3년)</span>
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-gray-200/50">
+                                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">증빙 내용</p>
+                                    <p className="text-slate-700 text-sm whitespace-pre-wrap">{proposal.completionReport.evidenceDescription}</p>
+
+                                    <div className="mt-4">
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">첨부 파일</p>
+                                        {proposal.completionReport.evidenceAttachments && proposal.completionReport.evidenceAttachments.length > 0 ? (
+                                            <div className="flex gap-2 flex-wrap">
+                                                {proposal.completionReport.evidenceAttachments.map((_, idx) => (
+                                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold">
+                                                        📎 첨부파일 {idx + 1}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 italic">첨부된 파일이 없습니다.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {proposal.completionReport.reviewComment && (
+                                    <div className="mt-4 pt-4 border-t border-gray-200/50">
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">심사 코멘트 ({proposal.completionReport.reviewedBy})</p>
+                                        <p className="text-slate-700 text-sm font-medium bg-white/50 p-2 rounded">
+                                            "{proposal.completionReport.reviewComment}"
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
             )}
@@ -760,6 +941,15 @@ const ProposalDetail: React.FC = () => {
                     )}
                 </div>
             </div>
+            {/* Modal */}
+            {proposal && (
+                <CompletionReportModal
+                    isOpen={isCompletionModalOpen}
+                    onClose={() => setIsCompletionModalOpen(false)}
+                    onSubmit={handleSubmitReport}
+                    proposalTitle={proposal.title}
+                />
+            )}
         </div>
     );
 };

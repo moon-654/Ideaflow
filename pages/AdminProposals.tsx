@@ -59,7 +59,11 @@ const AdminProposals: React.FC = () => {
             result = result.filter(p => p.status === statusFilter);
         }
 
-        return result;
+        return result.sort((a, b) => {
+            const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            return (b.proposalNumber || b.id).localeCompare(a.proposalNumber || a.id);
+        });
     }, [proposals, viewTab, searchQuery, statusFilter]);
 
     // Count proposals for tabs
@@ -326,7 +330,10 @@ const AdminProposals: React.FC = () => {
                                             )}
                                         </button>
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-slate-400 font-mono">{p.id}</td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        <div className="text-sm font-bold text-slate-900">{p.proposalNumber || p.id}</div>
+                                        {p.proposalNumber && <div className="text-[10px] text-slate-400 font-mono">{p.id}</div>}
+                                    </td>
                                     <td className="px-4 py-3">
                                         <span className={`text-sm font-medium ${p.isHidden ? 'text-slate-400' : 'text-slate-900'}`}>
                                             {p.title}

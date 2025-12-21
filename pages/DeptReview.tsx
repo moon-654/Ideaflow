@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
-import { CheckCircle, XCircle, Clock, RotateCcw, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RotateCcw, ChevronDown, ChevronUp, DollarSign, Users, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { stripHtml } from '../utils/html';
 import DOMPurify from 'dompurify';
@@ -34,9 +34,129 @@ const DeptReview: React.FC = () => {
 
   const [rejectReason, setRejectReason] = useState<{ [key: string]: string }>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { users } = useProposalStore();
 
-  const toggleExpand = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
+  // Execution Team Members State: { [proposalId]: [{id, name, share}] }
+  const [executionMembers, setExecutionMembers] = useState<{ [key: string]: { id: string, name: string, share: number }[] }>({});
+  // Track modified execution ratios: { [proposalId]: number }
+  const [executionRatios, setExecutionRatios] = useState<{ [key: string]: number }>({});
+  const [searchTerms, setSearchTerms] = useState<{ [key: string]: string }>({});
+
+  const addExecutionMember = (proposalId: string, user: any) => {
+    setExecutionMembers(prev => {
+      const current = prev[proposalId] || [];
+      if (current.find(m => m.id === user.id)) return prev;
+
+      const updatedList = [...current, { id: user.id, name: user.name, share: 0 }];
+
+      // Auto-Distribute Evenly: 100 / N
+      const count = updatedList.length;
+      const share = Math.floor(100 / count);
+      let remainder = 100 % count;
+
+      const distributedList = updatedList.map(m => {
+        let s = share;
+        if (remainder > 0) {
+          s += 1;
+          remainder--;
+        }
+        return { ...m, share: s };
+      });
+
+      return {
+        ...prev,
+        [proposalId]: distributedList
+      };
+    });
+    setSearchTerms(prev => ({ ...prev, [proposalId]: '' }));
+  };
+
+  const removeExecutionMember = (proposalId: string, idx: number) => {
+    setExecutionMembers(prev => {
+      const list = [...(prev[proposalId] || [])];
+      list.splice(idx, 1);
+
+      if (list.length === 0) return { ...prev, [proposalId]: [] };
+
+      // Auto-Distribute Evenly: 100 / N
+      const count = list.length;
+      const share = Math.floor(100 / count);
+      let remainder = 100 % count;
+
+      const distributedList = list.map(m => {
+        let s = share;
+        if (remainder > 0) {
+          s += 1;
+          remainder--;
+        }
+        return { ...m, share: s };
+      });
+
+      return { ...prev, [proposalId]: distributedList };
+    });
+  };
+
+  const updateExecutionMember = (proposalId: string, idx: number, newShare: number) => {
+    const clampedShare = Math.max(0, Math.min(100, newShare));
+
+    setExecutionMembers(prev => {
+      const list = [...(prev[proposalId] || [])];
+      const target = list[idx];
+      if (target.share === clampedShare) return prev;
+
+      const diff = clampedShare - target.share;
+      list[idx] = { ...target, share: clampedShare };
+
+      // Auto-balance: Subtract diff from others
+      // Try to subtract proportional or from first available
+      // Simple approach: Subtract from the member with highest share (excluding target)
+      let remainder = diff;
+
+      // Sort others by share desc to take from richest first
+      const othersIndices = list.map((_, i) => i).filter(i => i !== idx);
+
+      // Naive redistribution: just loop and take what we can
+      for (const i of othersIndices) {
+        if (remainder === 0) break;
+        if (remainder > 0) {
+          // Need to reduce others
+          const available = list[i].share;
+          const take = Math.min(available, remainder);
+          list[i].share -= take;
+          remainder -= take;
+        } else {
+          // Need to add to others (remainder is negative)
+          // Just add to first one
+          list[i].share -= remainder; // -(-5) = +5
+          remainder = 0;
+        }
+      }
+
+      return { ...prev, [proposalId]: list };
+    });
+  };
+
+  const updateExecutionRatio = (proposalId: string, newRatio: number) => {
+    const clamped = Math.max(0, Math.min(100, newRatio));
+    setExecutionRatios(prev => ({ ...prev, [proposalId]: clamped }));
+  };
+
+  // Initialize data when handling a proposal if not present
+  const initializeExecutionData = (proposal: any) => {
+    if (executionRatios[proposal.id] === undefined) {
+      setExecutionRatios(prev => ({ ...prev, [proposal.id]: proposal.executionTeamRatio || 0 }));
+    }
+    // Members are initialized lazily or if present in data? 
+    // Current system doesn't save individual members in DB separate from contributors yet, 
+    // but if we are re-opening a review, we might want to parse contributors?
+    // For now, assume fresh start or from state.
+  };
+
+  const toggleExpand = (proposal: any) => {
+    if (expandedId !== proposal.id) {
+      initializeExecutionData(proposal);
+    }
+    setExpandedId(expandedId === proposal.id ? null : proposal.id);
   };
 
   const handleAction = (id: string, action: 'accept' | 'reject' | 'modify') => {
@@ -45,13 +165,90 @@ const DeptReview: React.FC = () => {
       return;
     }
 
+    const proposal = proposals.find(p => p.id === id);
+    if (!proposal) return;
+
+    // Execution Logic validation
+    const currentExecRatio = executionRatios[id] ?? (proposal.executionTeamRatio || 0);
+
+    if (action === 'accept' && currentExecRatio > 0) {
+      const members = executionMembers[id] || [];
+      const totalShare = members.reduce((acc, m) => acc + m.share, 0);
+      if (members.length === 0) {
+        toast.error('실행 부서 지분이 할당되어 있습니다. 실행 담당자를 최소 1명 이상 지정해주세요.');
+        return;
+      }
+      if (totalShare !== 100) {
+        toast.error(`실행 담당자 간의 지분 합계는 100%여야 합니다. (현재: ${totalShare}%)`);
+        return;
+      }
+    }
+
     let newStatus: any = '1st_Review';
     let message = '제안이 1차 심의로 상정되었습니다.';
+
+    // Construct updated contributors list if accepting
+    let updatedContributors = proposal.contributors;
+
+    // Check for Ratio Change (Negotiation)
+    if (action === 'accept' && currentExecRatio !== oldExecRatio) {
+      newStatus = 'Modification_Requested';
+      message = '제안자에게 지분 변경 및 수락 요청을 보냈습니다.';
+
+      // Auto-generate comment if empty, or append
+      const autoComment = `[기여도 협의 요청]\n실행 부서에서 실행 부서 지분을 기존 ${oldExecRatio}%에서 ${currentExecRatio}%로 변경을 요청했습니다.\n제안 내용을 수정하여(지분 확인) 재상정해주시기 바랍니다.`;
+      rejectReason[id] = rejectReason[id] ? `${autoComment}\n\n${rejectReason[id]}` : autoComment;
+    }
+
+    if (action === 'accept' || (action === 'accept' && currentExecRatio !== oldExecRatio)) {
+      // If Execution Ratio Changed, we need to adjust Proposer
+      const ratioDiff = currentExecRatio - oldExecRatio;
+
+      let contributorsList = [...(proposal.contributors || [])];
+
+      if (ratioDiff !== 0) {
+        // Adjust Proposer
+        contributorsList = contributorsList.map(c => {
+          if (c.type === 'Proposer') {
+            return { ...c, ratio: c.ratio - ratioDiff };
+          }
+          return c;
+        });
+
+        // Validation for Negative Proposer check
+        const newProposer = contributorsList.find(c => c.type === 'Proposer');
+        if (newProposer && newProposer.ratio < 0) {
+          toast.error('실행 부서 지분을 너무 높게 설정하여 제안자 지분이 음수가 됩니다.');
+          return;
+        }
+      }
+
+      // Now Apply Execution Members
+      if (currentExecRatio > 0) {
+        const members = executionMembers[id] || [];
+        const newExecContributors = members.map(m => ({
+          id: m.id,
+          name: m.name,
+          department: currentUser.department,
+          type: 'Execution' as const,
+          ratio: parseFloat(((m.share / 100) * currentExecRatio).toFixed(1)), // Keep 1 decimal
+          hasAgreed: false
+        }));
+
+        // Remove old execution members and add new ones
+        updatedContributors = [
+          ...contributorsList.filter(c => c.type !== 'Execution'),
+          ...newExecContributors
+        ];
+      } else {
+        updatedContributors = contributorsList; // No execution members if ratio is 0
+      }
+    }
 
     if (action === 'reject') {
       newStatus = 'Rejected';
       message = '제안이 반려되었습니다.';
-    } else if (action === 'modify') {
+    } else if (action === 'modify' && newStatus !== 'Modification_Requested') {
       newStatus = 'Modification_Requested';
       message = '제안자에게 수정 요청을 보냈습니다.';
     }
@@ -59,6 +256,8 @@ const DeptReview: React.FC = () => {
     updateProposal(id, {
       status: newStatus,
       deptReviewComment: rejectReason[id] || '',
+      contributors: updatedContributors,
+      executionTeamRatio: currentExecRatio,
       ...(action === 'reject' ? { rejectReason: rejectReason[id] } : {})
     });
 
@@ -95,7 +294,7 @@ const DeptReview: React.FC = () => {
                 {/* Main Content */}
                 <div className="p-6 flex-1">
                   <div className="flex items-center gap-3 mb-3">
-                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded font-mono">{proposal.id}</span>
+                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded font-mono">{proposal.proposalNumber || proposal.id}</span>
                     <span className="text-xs text-slate-500 flex items-center gap-1">
                       <Clock size={12} /> {proposal.date}
                     </span>
@@ -110,7 +309,7 @@ const DeptReview: React.FC = () => {
 
                   {/* Expand/Collapse Button */}
                   <button
-                    onClick={() => toggleExpand(proposal.id)}
+                    onClick={() => toggleExpand(proposal)}
                     className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
                   >
                     {expandedId === proposal.id ? (
@@ -154,6 +353,100 @@ const DeptReview: React.FC = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Execution Team Allocation Section */}
+                  {/* Always show if enabled in settings, or just check ratio? Let's check ratio but allow adding if 0? No, rely on proposal first? */}
+                  {/* User wants to adjust, so we show it always? Or only if settings enabled? */}
+                  {/* Assuming enabled if we are here */}
+                  <div className="mt-4 bg-purple-50 p-4 rounded-xl border border-purple-100">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-bold text-purple-900 text-sm flex items-center gap-2">
+                        <Users size={16} /> 실행 부서 기여도 및 담당자 배정
+                      </h4>
+                    </div>
+
+                    {/* Main Ratio Slider */}
+                    <div className="bg-white p-3 rounded-lg border border-purple-100 mb-4 shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-slate-700">실행 부서 전체 지분</span>
+                        <span className="text-sm font-bold text-purple-600">{executionRatios[proposal.id] ?? proposal.executionTeamRatio}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={executionRatios[proposal.id] ?? proposal.executionTeamRatio ?? 0}
+                        onChange={(e) => updateExecutionRatio(proposal.id, parseInt(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">* 지분을 변경하면 제안자의 지분이 자동으로 조정됩니다.</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* List current execution members */}
+                      {(executionMembers[proposal.id] || []).map((member, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-purple-100">
+                          <span className="text-xs font-bold text-slate-700 w-24 truncate">{member.name}</span>
+                          <div className="flex-1">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={member.share}
+                              onChange={(e) => updateExecutionMember(proposal.id, idx, parseInt(e.target.value))}
+                              className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                          <input
+                            type="number"
+                            value={member.share}
+                            onChange={(e) => updateExecutionMember(proposal.id, idx, parseInt(e.target.value))}
+                            className="w-12 text-xs border border-gray-300 rounded px-1 text-right font-bold text-indigo-600"
+                          />
+                          <span className="text-xs text-slate-500">%</span>
+                          <button onClick={() => removeExecutionMember(proposal.id, idx)} className="text-slate-400 hover:text-red-500">
+                            <XCircle size={14} />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Dept Member List for Quick Add */}
+                      <div className="mt-4">
+                        <label className="text-xs font-bold text-slate-500 mb-2 block">부서원 목록 (선택하여 추가)</label>
+                        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                          {users
+                            .filter(u =>
+                              u.department === currentUser.department &&
+                              !(executionMembers[proposal.id] || []).find(m => m.id === u.id)
+                            )
+                            .map(u => (
+                              <button
+                                key={u.id}
+                                onClick={() => addExecutionMember(proposal.id, u)}
+                                className="text-left px-3 py-2 bg-white border border-gray-200 rounded hover:bg-purple-50 hover:border-purple-200 transition-colors flex items-center justify-between group"
+                              >
+                                <span className="text-xs font-bold text-slate-700">{u.name}</span>
+                                <span className="text-[10px] text-purple-600 font-bold opacity-0 group-hover:opacity-100">+ 추가</span>
+                              </button>
+                            ))
+                          }
+                          {users.filter(u => u.department === currentUser.department && !(executionMembers[proposal.id] || []).find(m => m.id === u.id)).length === 0 && (
+                            <div className="col-span-2 text-center text-xs text-slate-400 py-2 italic bg-slate-50 rounded border border-dashed border-gray-200">
+                              추가할 부서원이 없습니다.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs text-slate-500 pt-2 border-t border-purple-100">
+                        <span>담당자 간 배분 합계</span>
+                        <span className={`font-bold ${(executionMembers[proposal.id] || []).reduce((acc, m) => acc + m.share, 0) === 100 ? 'text-green-600' : 'text-red-500'}`}>
+                          {(executionMembers[proposal.id] || []).reduce((acc, m) => acc + m.share, 0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="flex items-center gap-4 text-sm text-slate-500 mt-4">
                     <div className="flex items-center gap-2">

@@ -278,6 +278,54 @@ const Settings: React.FC = () => {
                 </div>
               </div>
 
+              {/* Contribution Management Settings */}
+              <div className="pt-4 border-t border-gray-100">
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-3">공동 제안 관리</label>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 rounded bg-slate-50 border border-gray-200">
+                    <div>
+                      <span className="font-medium text-slate-700">공동 제안 및 기여율 관리 사용</span>
+                      <p className="text-xs text-slate-400 mt-0.5">제안 등록 시 다수의 제안자가 기여율을 설정할 수 있습니다.</p>
+                    </div>
+                    <button
+                      onClick={() => updateSettings({
+                        contribution: {
+                          ...settings.contribution,
+                          enabled: !settings.contribution?.enabled
+                        }
+                      })}
+                      className={`p-1 rounded-full transition-colors ${settings.contribution?.enabled ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-400'}`}
+                    >
+                      {settings.contribution?.enabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                    </button>
+                  </div>
+
+                  {settings.contribution?.enabled && (
+                    <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">최대 공동 제안자 수 (제안자 제외)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={settings.contribution?.maxCoAuthors || 3}
+                            onChange={(e) => updateSettings({
+                              contribution: {
+                                ...settings.contribution,
+                                maxCoAuthors: parseInt(e.target.value) || 3
+                              }
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
+                          />
+                          <span className="text-sm text-slate-400">명</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Evaluation Cutoff */}
               <div className="pt-4 border-t border-gray-100">
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-3">1차 심의 커트라인</label>

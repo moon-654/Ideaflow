@@ -17,6 +17,12 @@ const ProposalList: React.FC = () => {
             const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
             const matchesCategory = categoryFilter === 'All' || p.category === categoryFilter;
             return matchesSearch && matchesStatus && matchesCategory;
+        }).sort((a, b) => {
+            // Sort by Date Descending
+            const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            // Secondary Sort by Proposal Number Descending
+            return (b.proposalNumber || b.id).localeCompare(a.proposalNumber || a.id);
         });
     }, [proposals, searchTerm, statusFilter, categoryFilter]);
 
@@ -110,6 +116,10 @@ const ProposalList: React.FC = () => {
                                     <Calendar size={12} />
                                     {proposal.date}
                                 </span>
+                            </div>
+
+                            <div className="text-xs text-slate-400 font-mono mb-1">
+                                {proposal.proposalNumber || proposal.id}
                             </div>
 
                             <h3 className="text-base font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-primary transition-colors">

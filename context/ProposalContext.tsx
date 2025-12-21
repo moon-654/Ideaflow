@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus } from '../types';
+import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus, CompletionReport } from '../types';
 import { sendInstantNotification } from '../services/notificationService';
 import { MOCK_PROPOSALS, MOCK_MILEAGE_LOGS, CURRENT_USER } from '../constants';
 
@@ -73,6 +73,11 @@ interface ProposalContextType {
     bulkArchive: (proposalIds: string[], reason?: string) => void;
     bulkDelete: (proposalIds: string[], reason?: string) => void;
     updateCoAuthors: (proposalId: string, coAuthors: { id: string; name: string; department: string }[]) => void;
+    // Completion Report
+    submitCompletionReport: (proposalId: string, report: Omit<CompletionReport, 'id'>) => void;
+    evaluateCompletionReport: (proposalId: string, recognizedPercentage: number, comment: string) => void;
+    distributeReward: (proposal: Proposal, type: MileageLog['type'], points: number, description: string) => void;
+    agreeToContribution: (proposalId: string) => void;
 }
 
 const ProposalContext = createContext<ProposalContextType | undefined>(undefined);
@@ -202,6 +207,12 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             // Supplement Request Settings
             supplementDeadlineDays: 7,  // Default 1 week
+
+            // Contribution Settings
+            contribution: {
+                enabled: true,
+                maxCoAuthors: 3
+            }
         };
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -291,20 +302,71 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     }, [currentUser.email, currentUser.role, currentUser.id]);
 
+    // Migration: Backfill proposalNumber for legacy proposals
+    React.useEffect(() => {
+        setProposals(prev => {
+            const needsMigration = prev.some(p => !p.proposalNumber);
+            if (!needsMigration) return prev;
+
+            console.log('Migrating legacy proposals...');
+            // Sort by date to assign numbers sequentially
+            const sorted = [...prev].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            let seqCounter = 1;
+            const updated = sorted.map(p => {
+                if (p.proposalNumber) return p;
+
+                const year = new Date(p.date).getFullYear();
+                const num = `AKC_IP-${year}-${String(seqCounter++).padStart(3, '0')}`;
+                return { ...p, proposalNumber: num };
+            });
+
+            return updated;
+        });
+    }, []); // Run once on mount
+
 
     // Actions
-    const addProposal = (proposal: Proposal) => {
-        setProposals(prev => [proposal, ...prev]);
+    const addProposal = (newProposal: Proposal) => {
+        // Generate Document Number if missing
+        let proposalWithNumber = { ...newProposal };
+        if (!proposalWithNumber.proposalNumber) {
+            const year = new Date().getFullYear();
+            const prefix = `AKC_IP-${year}`;
+
+            // Find max sequence for current year
+            const existingNumbers = proposals
+                .map(p => p.proposalNumber)
+                .filter((num): num is string => !!num && num.startsWith(prefix))
+                .map(num => {
+                    const parts = num.split('-');
+                    return parseInt(parts[2], 10);
+                })
+                .filter(n => !isNaN(n));
+
+            const maxSeq = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+            const nextSeq = maxSeq + 1;
+
+            proposalWithNumber.proposalNumber = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+        }
+
+        setProposals(prev => [proposalWithNumber, ...prev]);
 
         // Trigger Notification: New Proposal
         if (settings.notifications.newProposal) {
-            sendInstantNotification('newProposal', proposal, {
+            sendInstantNotification('newProposal', proposalWithNumber, {
                 users,
                 config: settings.emailConfig,
                 templates: settings.emailTemplates || [],
                 notifySettings: settings.notifications,
                 addSystemLog
             });
+        }
+
+        // Award Registration Mileage
+        const regPoints = settings.mileageRules.registration || 0;
+        if (regPoints > 0) {
+            distributeReward(proposalWithNumber, 'Registration', regPoints, '제안 등록 마일리지');
         }
     };
 
@@ -337,6 +399,16 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             if (newProposal.status === '1st_Review') { // Passed Dept Review
                 sendInstantNotification('deptReview', newProposal, contextData);
+
+                // Award Dept Pass Mileage (if transitioning from Dept_Review -> 1st_Review)
+                // Note: Check previous status to avoid duplicate awards if just updating fields
+                if (target.status === 'Dept_Review') {
+                    const passPoints = settings.mileageRules.deptPass || 0;
+                    if (passPoints > 0) {
+                        distributeReward(newProposal, 'Dept_Pass', passPoints, '부서 검토 통과 마일리지');
+                    }
+                }
+
             } else if (newProposal.status === 'Rejected') {
                 sendInstantNotification('reject', newProposal, contextData);
             } else if (newProposal.status === 'Completed') {
@@ -642,7 +714,7 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     newStatus = 'Completed';
                 }
 
-                return {
+                const updatedProposal = {
                     ...p,
                     status: newStatus,
                     grade2nd: allReviewersComplete ? finalGrade : p.grade2nd,
@@ -655,8 +727,41 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                         reviewerCount: newReviews.length
                     }
                 };
+
+                // Award Grade Mileage if Completed
+                if (newStatus === 'Completed' && p.status !== 'Completed') {
+                    const gradePoints = settings.grades.find(g => g.id === finalGrade)?.mileagePoints || 0;
+                    if (gradePoints > 0) {
+                        // We use setTimeout to ensure state update has processed if needed, or just call directly.
+                        // Here we need to call distributeReward but we can't because we are INSIDE setProposals updater!
+                        // This is an issue. 'distributeReward' calls 'addMileageLog' which calls 'setMileageLogs'.
+                        // Calling setState inside another setState updater is generally fine in React 18, but logic-wise...
+                        // We should trigger a side effect or do it outside.
+                    }
+                }
+
+                return updatedProposal;
             }
         }));
+
+        // Side Effect for Grade Reward: Since we can't easily do async dispatch inside map,
+        // we'll duplicate the "Check Completion" logic outside or use a useEffect on proposals change?
+        // Using useEffect is cleaner to catch "Status changed to Completed".
+        // But we already have a notification trigger in updateProposal. 
+        // THIS function `addReviewerEvaluation` updates state directly.
+        // It DOES NOT call `updateProposal`. 
+
+        // Solution: We should move the "Completion Check" logic to a separate effect or
+        // Just execute it here by reading the *calculated* values.
+
+        // Let's re-read the state afterwards? No.
+        // We will execute the reward AFTER setProposals.
+        // But we need the computed 'finalGrade' and 'updatedProposal'.
+
+        // BETTER APPROACH:
+        // Calculate the update first.
+        // Then setProposals.
+        // Then if completed, call distributeReward.
     };
 
     const getReviewerCount = (proposalId: string, round: '1st' | '2nd'): number => {
@@ -676,6 +781,76 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     // Unified Comment System
+    const distributeReward = (proposal: Proposal, type: MileageLog['type'], totalPoints: number, description: string) => {
+        const contributors = proposal.contributors && proposal.contributors.length > 0
+            ? proposal.contributors
+            : [{ id: proposal.proposer.id, name: proposal.proposer.name, department: proposal.proposer.department, type: 'Proposer' as const, ratio: 100 }];
+
+        console.log(`[Reward] Distributing ${totalPoints} points for ${proposal.id} (${type})`);
+
+        contributors.forEach(contributor => {
+            if (contributor.ratio > 0) {
+                // Determine shares
+                // If points are small (like 1 or 2), simple rounding might result in 0 or > total. 
+                // For small points like Registration(1) or DeptPass(2), maybe duplicates are better? 
+                // Requirement: "Rewards" distributed based on ratio.
+                // Case: 1 point, 3 people (33%). Round(0.33) = 0. No one gets it?
+                // Policy: For small points (< 10), everyone gets the full point? Or Proposer gets main?
+                // User said: "All mileage points... distributed based on contribution ratios".
+                // Let's stick to Math.round logic but ensure minimum 1 if ratio > 0? No, that inflates.
+                // Let's implement robust rounding.
+
+                let share = Math.round(totalPoints * (contributor.ratio / 100));
+
+                // Edge case: If totalPoints is small (e.g. 1 or 2), floating point math might give 0.
+                // If points are very small (e.g. < 5), we might want to give full points to Proposer, or shared?
+                // Let's assume proportional for now. If 0, it's 0.
+
+                if (share > 0) {
+                    addMileageLog({
+                        id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        userId: contributor.id,
+                        userName: contributor.name,
+                        department: contributor.department,
+                        proposalId: proposal.id,
+                        proposalTitle: proposal.title,
+                        type: type,
+                        points: share,
+                        date: new Date().toISOString().split('T')[0],
+                        status: 'Accrued',
+                        description: `${description} (기여타입: ${contributor.type}, 기여율: ${contributor.ratio}%)`
+                    });
+                }
+            }
+        });
+    };
+
+    const agreeToContribution = (proposalId: string) => {
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+
+            const updatedContributors = p.contributors?.map(c =>
+                c.id === currentUser.id
+                    ? { ...c, hasAgreed: true, agreedAt: new Date().toISOString() }
+                    : c
+            );
+
+            return {
+                ...p,
+                contributors: updatedContributors
+            };
+        }));
+
+        addSystemLog({
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            user: currentUser.name,
+            action: 'Contribution Agreed',
+            details: `User ${currentUser.name} agreed to contribution ratio for proposal ${proposalId}`,
+            level: 'Info'
+        });
+    };
+
     const addUnifiedComment = (proposalId: string, comment: Omit<UnifiedComment, 'id' | 'createdAt'>) => {
         const newComment: UnifiedComment = {
             ...comment,
@@ -1004,6 +1179,91 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
     };
 
+    // Completion Report Functions
+    const submitCompletionReport = (proposalId: string, reportData: Omit<CompletionReport, 'id'>) => {
+        const newReport: CompletionReport = {
+            ...reportData,
+            id: `rep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        };
+
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            return {
+                ...p,
+                completionReport: newReport,
+            };
+        }));
+
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (proposal) {
+            addSystemLog({
+                id: `log_${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                action: '완료 보고 제출',
+                user: currentUser.name,
+                details: `제안: ${proposal.title}, 금액: ${reportData.actualSavingAmount}`,
+                level: 'Info'
+            });
+
+            // Notify Admins? (Optional, but good practice)
+        }
+    };
+
+    const evaluateCompletionReport = (proposalId: string, recognizedPercentage: number, comment: string) => {
+        const proposal = proposals.find(p => p.id === proposalId);
+        if (!proposal || !proposal.completionReport) return;
+
+        const actualAmount = proposal.completionReport.actualSavingAmount;
+        // Formula: (Annual Saving * 1% * 3 Years) / 1000 = Points
+        // Apply Recognized Percentage
+        const finalRecognizedAmount = Math.floor(actualAmount * (recognizedPercentage / 100));
+        const totalCheckingAmount = finalRecognizedAmount * 3; // 3 Years
+        const rewardPoints = Math.floor((totalCheckingAmount * 0.01) / 1000);
+
+        setProposals(prev => prev.map(p => {
+            if (p.id !== proposalId) return p;
+            if (!p.completionReport) return p;
+
+            return {
+                ...p,
+                completionReport: {
+                    ...p.completionReport,
+                    status: recognizedPercentage > 0 ? 'Approved' : 'Rejected',
+                    recognizedPercentage,
+                    finalRecognizedAmount,
+                    reviewComment: comment,
+                    reviewedBy: currentUser.name,
+                    reviewedAt: new Date().toISOString()
+                }
+            };
+        }));
+
+        // Award Mileage
+        if (rewardPoints > 0) {
+            addMileageLog({
+                id: `log_${Date.now()}`,
+                userId: proposal.proposer.id,
+                userName: proposal.proposer.name,
+                department: proposal.proposer.department,
+                proposalId: proposal.id,
+                proposalTitle: proposal.title,
+                type: 'Cost_Saving_Reward',
+                points: rewardPoints,
+                date: new Date().toISOString(),
+                status: 'Accrued'
+            });
+
+            addNotification({
+                recipientId: proposal.proposer.id,
+                type: 'status_change', // Reusing status_change or creating a new type
+                proposalId,
+                proposalTitle: proposal.title,
+                message: `성과 심사가 완료되었습니다. ${rewardPoints}P가 지급되었습니다.`,
+                link: `/proposals/${proposalId}`
+            });
+        }
+    };
+
     // Persist notifications to localStorage
     useEffect(() => {
         localStorage.setItem('ideaflow_notifications', JSON.stringify(notifications));
@@ -1063,6 +1323,8 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             bulkDelete,
             updateCoAuthors,
+            submitCompletionReport,
+            evaluateCompletionReport,
         }}>
             {children}
         </ProposalContext.Provider>

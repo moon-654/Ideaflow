@@ -72,6 +72,7 @@ export type ProposalStatus =
 
 export interface Proposal {
   id: string;
+  proposalNumber?: string; // e.g. "AKC_IP-2025-001"
   title: string;
   summary: string;
   proposer: User;
@@ -144,8 +145,26 @@ export interface Proposal {
   archivedBy?: string;
   archivedReason?: string;
 
-  // Co-Authors
-  coAuthors?: { id: string; name: string; department: string }[];
+  // Co-Authors & Contribution
+  coAuthors?: { id: string; name: string; department: string }[]; // Keeping for backward compatibility or display
+  contributors?: Contributor[]; // [NEW] Full contribution tracking
+  executionTeamRatio?: number; // [NEW] Ratio allocated to Execution Team (0-100)
+
+  // Completion Report
+  completionReport?: CompletionReport;
+}
+
+export interface CompletionReport {
+  id: string;
+  actualSavingAmount: number; // Annual saving amount in KRW
+  evidenceDescription: string;
+  evidenceAttachments: string[]; // URLs of attached files (mock)
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Partial';
+  recognizedPercentage?: number; // 0, 80, 100 etc.
+  finalRecognizedAmount?: number; // Calculated based on percentage
+  reviewComment?: string; // Comment from the committee
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 export interface Comment {
@@ -225,10 +244,11 @@ export interface MileageLog {
   department: string;
   proposalId: string;
   proposalTitle: string;
-  type: 'Registration' | 'Dept_Pass' | 'Grade_S' | 'Grade_A' | 'Grade_B' | 'Grade_C';
+  type: 'Registration' | 'Dept_Pass' | 'Grade_S' | 'Grade_A' | 'Grade_B' | 'Grade_C' | 'Cost_Saving_Reward';
   points: number;
   date: string;
   status: 'Accrued' | 'Paid';
+  description?: string;
 }
 
 export interface StatCardProps {
@@ -327,4 +347,21 @@ export interface SettingsState {
 
   // Supplement Request Settings
   supplementDeadlineDays: number;  // Default 7 (1 week)
+
+  // Contribution Management Settings
+  contribution: {
+    enabled: boolean;
+    maxCoAuthors: number;
+    description?: string;
+  };
+}
+
+export interface Contributor {
+  id: string; // userId
+  name: string;
+  department: string;
+  type: 'Proposer' | 'CoAuthor' | 'Execution';
+  ratio: number; // Percentage (0-100)
+  hasAgreed: boolean; // For final reward confirmation
+  agreedAt?: string;
 }

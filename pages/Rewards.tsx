@@ -14,7 +14,9 @@ const TYPE_MAP: Record<string, string> = {
 };
 
 const Rewards: React.FC = () => {
-  const { mileageLogs, updateMileageLog, currentUser } = useProposalStore();
+  const { mileageLogs, updateMileageLog, currentUser, proposals } = useProposalStore();
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('All');
 
   const isAdmin = currentUser.role === 'Admin';
 
@@ -104,9 +106,29 @@ const Rewards: React.FC = () => {
 
       {/* Point Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex justify-between items-center">
-          <h3 className="font-bold text-slate-900 flex items-center gap-2"><History size={18} /> 마일리지 이력</h3>
-          <span className="text-xs text-slate-500">지급 기준: 등록(1), 부서통과(2), S급(100), A급(50), B급(30), C급(10)</span>
+        <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-900 flex items-center gap-2"><History size={18} /> 마일리지 이력</h3>
+            <span className="text-xs text-slate-500 hidden md:inline">지급 기준: 등록(1), 부서통과(2), S급(100), A급(50), B급(30), C급(10)</span>
+          </div>
+
+          <div className="flex gap-2 w-full md:w-auto">
+            <input
+              placeholder="이름, 제안명 검색"
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+            <select
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="All">전체 상태</option>
+              <option value="Accrued">적립됨 (지급 대기)</option>
+              <option value="Paid">지급 완료</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -122,38 +144,60 @@ const Rewards: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {relevantLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 text-slate-500 whitespace-nowrap">{log.date}</td>
-                  <td className="p-4">
-                    <div className="font-bold text-slate-900">{log.userName}</div>
-                    <div className="text-xs text-slate-400">{log.department}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-xs text-slate-400 font-mono mb-0.5">{log.proposalId}</div>
-                    <div className="text-slate-700 font-medium truncate max-w-xs">{log.proposalTitle}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase border
+              {relevantLogs.filter(log =>
+                (log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  log.proposalTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  log.proposalId?.toLowerCase().includes(searchTerm.toLowerCase())
+                ) &&
+                (statusFilter === 'All' || log.status === statusFilter)
+              ).length === 0 ? (
+                <tr><td colSpan={6} className="p-8 text-center text-slate-400">검색 결과가 없습니다.</td></tr>
+              ) : (
+                relevantLogs.filter(log =>
+                  (log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    log.proposalTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    log.proposalId?.toLowerCase().includes(searchTerm.toLowerCase())
+                  ) &&
+                  (statusFilter === 'All' || log.status === statusFilter)
+                ).map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-4 text-slate-500 whitespace-nowrap">{log.date.substring(0, 10)}</td>
+                    <td className="p-4">
+                      <div className="font-bold text-slate-900">{log.userName}</div>
+                      <div className="text-xs text-slate-400">{log.department}</div>
+                    </td>
+                    <td className="p-4">
+                      {(() => {
+                        const prop = proposals.find(p => p.id === log.proposalId);
+                        return (
+                          <div className="text-xs text-slate-400 font-mono mb-0.5">
+                            {prop?.proposalNumber || log.proposalId}
+                          </div>
+                        );
+                      })()}
+                      <div className="text-slate-700 font-medium truncate max-w-xs" title={log.proposalTitle}>{log.proposalTitle}</div>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded text-xs font-bold uppercase border
                       ${log.type.includes('Grade') ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}
                     `}>
-                      {TYPE_MAP[log.type] || log.type}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right font-bold text-slate-900">+{log.points}</td>
-                  <td className="p-4 text-center">
-                    {log.status === 'Paid' ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                        <CheckCircle size={12} /> 지급완료
+                        {TYPE_MAP[log.type] || log.type}
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-                        적립됨
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="p-4 text-right font-bold text-slate-900">+{log.points}</td>
+                    <td className="p-4 text-center">
+                      {log.status === 'Paid' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                          <CheckCircle size={12} /> 지급완료
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                          적립됨
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )))}
             </tbody>
           </table>
         </div>

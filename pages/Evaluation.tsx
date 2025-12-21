@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { stripHtml } from '../utils/html';
 import DOMPurify from 'dompurify';
 import { aiService } from '../services/aiService';
-import { ReviewerEvaluation } from '../types';
+import { ReviewerEvaluation, CompletionReport } from '../types';
+import CompletionReviewModal from '../components/CompletionReviewModal'; // [NEW]
 
 interface AIAnalysisResult {
   summary: string;
@@ -16,8 +17,8 @@ interface AIAnalysisResult {
 }
 
 const Evaluation: React.FC = () => {
-  const { proposals, updateProposal, settings, currentUser, addReviewerEvaluation, hasUserReviewed, getReviewerCount, requestSupplement } = useProposalStore();
-  const [activeRound, setActiveRound] = useState<'1st' | '2nd'>(() => {
+  const { proposals, updateProposal, settings, currentUser, addReviewerEvaluation, hasUserReviewed, getReviewerCount, requestSupplement, evaluateCompletionReport } = useProposalStore();
+  const [activeRound, setActiveRound] = useState<'1st' | '2nd' | 'completion'>(() => {
     return currentUser.role === '2차 심의위원' ? '2nd' : '1st';
   });
   const [filterText, setFilterText] = useState('');
@@ -35,6 +36,10 @@ const Evaluation: React.FC = () => {
   // 2nd round AI analysis state
   const [analyzing2ndIds, setAnalyzing2ndIds] = useState<Record<string, boolean>>({});
   const [aiResults2nd, setAiResults2nd] = useState<Record<string, any>>({});
+
+  // Completion Review State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedProposalForReview, setSelectedProposalForReview] = useState<{ id: string, title: string, report: CompletionReport } | null>(null);
 
   // Get dynamic settings
   const criteria = settings.evaluationCriteria || [];
@@ -55,7 +60,9 @@ const Evaluation: React.FC = () => {
     // Round filter
     const matchesRound = activeRound === '1st'
       ? p.status === '1st_Review'
-      : p.status === '2nd_Review';
+      : activeRound === '2nd'
+        ? p.status === '2nd_Review'
+        : p.completionReport !== undefined && (p.status === 'Completed'); // Completion Review Filter
 
     // Search filter
     const matchesSearch = p.title.toLowerCase().includes(filterText.toLowerCase()) || p.id.includes(filterText);
@@ -70,6 +77,12 @@ const Evaluation: React.FC = () => {
     } else if (activeSubTab === 'completed') {
       matchesSubTab = userReviewed; // Only show proposals reviewed by this user
     }
+
+    // For Completion Review, 'pending' means report status is 'Pending', 'completed' means 'Approved' or 'Rejected'
+    if (activeRound === 'completion') {
+      if (activeSubTab === 'pending') matchesSubTab = p.completionReport?.status === 'Pending';
+      if (activeSubTab === 'completed') matchesSubTab = p.completionReport?.status !== 'Pending';
+    }
     // 'all' shows everything (no additional filter)
 
     return matchesRound && matchesSearch && matchesSubTab;
@@ -77,17 +90,21 @@ const Evaluation: React.FC = () => {
 
   // Count for badges
   const pendingCount = proposals.filter(p => {
+    if (activeRound === 'completion') return p.completionReport?.status === 'Pending';
     const matchesRound = activeRound === '1st' ? p.status === '1st_Review' : p.status === '2nd_Review';
     return matchesRound && !hasUserReviewed(p.id, currentUser.id, activeRound);
   }).length;
 
   const completedCount = proposals.filter(p => {
+    if (activeRound === 'completion') return p.completionReport?.status !== 'Pending' && p.completionReport !== undefined;
     const matchesRound = activeRound === '1st' ? p.status === '1st_Review' : p.status === '2nd_Review';
     return matchesRound && hasUserReviewed(p.id, currentUser.id, activeRound);
   }).length;
 
   const allCount = proposals.filter(p => {
-    return activeRound === '1st' ? p.status === '1st_Review' : p.status === '2nd_Review';
+    return activeRound === '1st' ? p.status === '1st_Review'
+      : activeRound === '2nd' ? p.status === '2nd_Review'
+        : p.completionReport !== undefined;
   }).length;
 
   // Local score handlers (for current reviewer before submission)
@@ -336,6 +353,25 @@ const Evaluation: React.FC = () => {
   // Calculate counts for badges
   const pending1st = proposals.filter(p => p.status === '1st_Review').length;
   const pending2nd = proposals.filter(p => p.status === '2nd_Review').length;
+  const pendingCompletion = proposals.filter(p => p.status === 'Completed' && p.completionReport?.status === 'Pending').length;
+
+  const handleOpenReviewModal = (proposal: any) => {
+    if (!proposal.completionReport) return;
+    setSelectedProposalForReview({
+      id: proposal.id,
+      title: proposal.title,
+      report: proposal.completionReport
+    });
+    setReviewModalOpen(true);
+  };
+
+  const handleCompletionEvaluate = (percentage: number, comment: string) => {
+    if (selectedProposalForReview) {
+      evaluateCompletionReport(selectedProposalForReview.id, percentage, comment);
+      setReviewModalOpen(false);
+      setSelectedProposalForReview(null);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -373,6 +409,19 @@ const Evaluation: React.FC = () => {
               )}
             </button>
           )}
+          {(currentUser.role === 'Admin' || currentUser.role === 'Reviewer' || currentUser.role === '2차 심의위원') && (
+            <button
+              onClick={() => setActiveRound('completion')}
+              className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeRound === 'completion' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <CheckCircle size={16} /> 성과 심사 (완료 보고)
+              {pendingCompletion > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center animate-pulse-subtle">
+                  {pendingCompletion}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -389,12 +438,19 @@ const Evaluation: React.FC = () => {
               <span className="font-bold">• 커트라인: {cutoff}점 (미만 자동 탈락)</span>
             </div>
           </div>
-        ) : (
+        ) : activeRound === '2nd' ? (
           <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl flex flex-col md:flex-row gap-4 text-sm text-purple-800">
             <div className="flex items-center gap-2 font-bold"><Award size={18} /> 2차 심의 규칙:</div>
             <div className="flex gap-4 opacity-80 flex-wrap">
               <span>• 사업 영향도 평가</span>
               <span>• 최종 등급({grades.map(g => g.id).join('/')}) 확정</span>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col md:flex-row gap-4 text-sm text-green-800">
+            <div className="flex items-center gap-2 font-bold"><CheckCircle size={18} /> 성과 심사 규칙:</div>
+            <div className="flex gap-4 opacity-80 flex-wrap">
+              <span>• 실제 절감 성과 확인 및 마일리지 지급 (연간 절감액의 1% × 3년)</span>
             </div>
           </div>
         )
@@ -462,7 +518,7 @@ const Evaluation: React.FC = () => {
             {/* Proposal Content */}
             <div className="flex-1 space-y-3">
               <div className="flex items-center gap-3">
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-mono font-bold rounded">{prop.id}</span>
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-mono font-bold rounded">{prop.proposalNumber || prop.id}</span>
                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs font-bold uppercase rounded">대상부서: {prop.targetDepartment}</span>
               </div>
               <div>
@@ -597,23 +653,54 @@ const Evaluation: React.FC = () => {
                   ) : (
                     <>
                       {/* Dynamic criteria inputs */}
-                      <div className={`grid gap-4 ${criteria.length <= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        {criteria.map(c => (
-                          <div key={c.id}>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                              {c.name} ({c.maxPoints}점)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              max={c.maxPoints}
-                              value={localScores[prop.id]?.[c.id] || ''}
-                              onChange={(e) => handleLocalScoreChange(prop.id, c.id, e.target.value, c.maxPoints)}
-                              className="w-full text-center font-bold border-gray-300 rounded focus:ring-primary focus:border-primary bg-white text-slate-900"
-                              placeholder="0"
-                            />
-                          </div>
-                        ))}
+                      <div className={`grid gap-6 ${criteria.length <= 2 ? 'grid-cols-1' : 'grid-cols-1'}`}>
+                        {criteria.map(c => {
+                          const currentScore = localScores[prop.id]?.[c.id] || 0;
+                          return (
+                            <div key={c.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                              <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs font-bold text-slate-700 uppercase">
+                                  {c.name}
+                                </label>
+                                <span className="text-xs text-slate-400 font-medium">최대 {c.maxPoints}점</span>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <div className="flex-1 relative h-6 flex items-center">
+                                  <div className="absolute w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all duration-150"
+                                      style={{ width: `${(Number(currentScore) / c.maxPoints) * 100}%` }}
+                                    />
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max={c.maxPoints}
+                                    step="1"
+                                    value={currentScore}
+                                    onChange={(e) => handleLocalScoreChange(prop.id, c.id, e.target.value, c.maxPoints)}
+                                    className="absolute w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                  <div
+                                    className="absolute w-4 h-4 bg-white border-2 border-primary rounded-full shadow pointer-events-none transition-all duration-150"
+                                    style={{ left: `calc(${currentScore > 0 ? (Number(currentScore) / c.maxPoints) * 100 : 0}% - 8px)` }}
+                                  />
+                                </div>
+
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={c.maxPoints}
+                                  value={currentScore}
+                                  onChange={(e) => handleLocalScoreChange(prop.id, c.id, e.target.value, c.maxPoints)}
+                                  className="w-16 h-10 text-center font-bold text-lg border-2 border-slate-100 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white text-slate-900 outline-none transition-all"
+                                  placeholder="0"
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
 
                       {/* Comment Input */}
@@ -908,6 +995,8 @@ const Evaluation: React.FC = () => {
                     </div>
                   )}
 
+
+
                   {/* Admin Finalize Button */}
                   {currentUser.role === 'Admin' && prop.aggregated2nd && (
                     <button
@@ -920,10 +1009,81 @@ const Evaluation: React.FC = () => {
                 </div>
               )}
 
+              {activeRound === 'completion' && prop.completionReport && (
+                <div className="space-y-4">
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <span className="text-xs text-slate-400 font-bold uppercase block mb-1">제출된 연간 절감액</span>
+                    <div className="text-2xl font-black text-slate-900 mb-4">
+                      {prop.completionReport.actualSavingAmount.toLocaleString()}원
+                    </div>
+
+                    <div>
+                      <span className="text-xs text-slate-400 font-bold uppercase block mb-1">증빙 내용 및 설명</span>
+                      <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-700 whitespace-pre-wrap border border-slate-100 min-h-[80px]">
+                        {prop.completionReport.evidenceDescription || <span className="text-slate-400 italic">입력된 내용이 없습니다.</span>}
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <span className="text-xs text-slate-400 font-bold uppercase block mb-1">첨부 파일</span>
+                      {prop.completionReport.evidenceAttachments && prop.completionReport.evidenceAttachments.length > 0 ? (
+                        <div className="space-y-1">
+                          {prop.completionReport.evidenceAttachments.map((file, idx) => (
+                            <div key={idx} className="flex items-center gap-2 text-xs text-blue-600">
+                              <span className="font-bold">📎</span>
+                              <span className="underline cursor-pointer">첨부파일 {idx + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">첨부된 파일이 없습니다.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {prop.completionReport.status === 'Pending' ? (
+                    <button
+                      onClick={() => handleOpenReviewModal(prop)}
+                      className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+                    >
+                      <CheckCircle size={16} /> 심사 및 보상 지급
+                    </button>
+                  ) : (
+                    <div className={`p-4 rounded-lg border text-center ${prop.completionReport.status === 'Approved' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+                      }`}>
+                      <p className="font-bold text-sm mb-1">
+                        {prop.completionReport.status === 'Approved' ? '승인됨 (성과 인정)' : '반려됨'}
+                      </p>
+                      <p className="text-xs opacity-80">
+                        {prop.completionReport.reviewedBy}님이 심사함<br />
+                        ({new Date(prop.completionReport.reviewedAt!).toLocaleDateString()})
+                      </p>
+                      {prop.completionReport.finalRecognizedAmount && (
+                        <div className="mt-2 pt-2 border-t border-green-200">
+                          <p className="text-xs">인정 금액: {prop.completionReport.finalRecognizedAmount.toLocaleString()}원</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
         ))}
       </div>
+
+      {
+        selectedProposalForReview && selectedProposalForReview.report && (
+          <CompletionReviewModal
+            isOpen={reviewModalOpen}
+            onClose={() => setReviewModalOpen(false)}
+            onEvaluate={handleCompletionEvaluate}
+            report={selectedProposalForReview.report}
+            proposalTitle={selectedProposalForReview.title}
+          />
+        )
+      }
     </div >
   );
 };
