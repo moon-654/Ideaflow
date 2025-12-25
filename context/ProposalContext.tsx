@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Proposal, MileageLog, User, Department, SystemLog, Comment, SettingsState, ReviewerEvaluation, UnifiedComment, ProposalRevision, SupplementRequest, Notification, ProposalStatus, CompletionReport, PayoutBatch } from '../types';
 import { sendInstantNotification } from '../services/notificationService';
 import { MOCK_PROPOSALS, MOCK_MILEAGE_LOGS, CURRENT_USER } from '../constants';
-
+import { proposalsApi, usersApi, departmentsApi, mileageApi, settingsApi, healthApi } from '../services/apiService';
 const MOCK_USERS: User[] = [
     { id: 'user1', name: '김철수', role: 'User', department: '생산관리팀', avatarUrl: '' },
     { id: 'user2', name: '이영희', role: 'Reviewer', department: '인사팀', avatarUrl: '' },
@@ -86,6 +86,10 @@ interface ProposalContextType {
 const ProposalContext = createContext<ProposalContextType | undefined>(undefined);
 
 export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    // API connection state
+    const [isApiConnected, setIsApiConnected] = useState<boolean | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
     // Initialize state from localStorage or fall back to constants
     const [proposals, setProposals] = useState<Proposal[]>(() => {
         const saved = localStorage.getItem('ideaflow_proposals');
@@ -233,6 +237,67 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         return defaults;
     });
+
+    // ========================================
+    // API Data Loading Effect
+    // Load data from server on mount, fallback to localStorage
+    // ========================================
+    useEffect(() => {
+        const loadDataFromApi = async () => {
+            try {
+                // Check if API server is available
+                const health = await healthApi.check();
+                if (health.status !== 'ok') throw new Error('API not healthy');
+
+                setIsApiConnected(true);
+                console.log('✅ API Server connected, loading data...');
+
+                // Load all data from API in parallel
+                const [apiProposals, apiUsers, apiDepartments, apiMileage, apiSettings] = await Promise.all([
+                    proposalsApi.getAll().catch(() => null),
+                    usersApi.getAll().catch(() => null),
+                    departmentsApi.getAll().catch(() => null),
+                    mileageApi.getAll().catch(() => null),
+                    settingsApi.getAll().catch(() => null),
+                ]);
+
+                // Only update state if we got valid data from API
+                if (apiProposals && Array.isArray(apiProposals) && apiProposals.length > 0) {
+                    setProposals(apiProposals);
+                    console.log(`📦 Loaded ${apiProposals.length} proposals from API`);
+                }
+                if (apiUsers && Array.isArray(apiUsers) && apiUsers.length > 0) {
+                    setUsers(apiUsers);
+                    console.log(`👥 Loaded ${apiUsers.length} users from API`);
+                }
+                if (apiDepartments && Array.isArray(apiDepartments) && apiDepartments.length > 0) {
+                    // Skip loading departments from API due to Korean encoding issues in DB
+                    // Use local defaults (MOCK_DEPARTMENTS) which have correct Korean text
+                    console.log(`🏢 Skipping API departments (${apiDepartments.length}) - using local Korean defaults`);
+                    // setDepartments(apiDepartments);  // Disabled due to encoding
+                }
+                if (apiMileage && Array.isArray(apiMileage) && apiMileage.length > 0) {
+                    setMileageLogs(apiMileage);
+                    console.log(`💰 Loaded ${apiMileage.length} mileage logs from API`);
+                }
+                if (apiSettings && typeof apiSettings === 'object' && Object.keys(apiSettings).length > 0) {
+                    // Exclude categories and grades from API to preserve Korean defaults
+                    // (DB may have encoding issues with Korean text)
+                    const { categories, grades, ...safeSettings } = apiSettings as any;
+                    setSettings(prev => ({ ...prev, ...safeSettings }));
+                    console.log('⚙️ Loaded settings from API (excluding categories/grades)');
+                }
+
+            } catch (error) {
+                console.warn('⚠️ API Server not available, using localStorage:', error);
+                setIsApiConnected(false);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadDataFromApi();
+    }, []); // Run once on mount
 
 
     // Migration: Fix Role and Department for existing sessions

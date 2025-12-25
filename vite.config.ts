@@ -10,10 +10,21 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
-        '/api/openproject': {
+        // IdeaFlow Backend API
+        '/api': {
+          target: 'http://localhost:4000',
+          changeOrigin: true,
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.log('API proxy error', err);
+            });
+          },
+        },
+        // OpenProject API (different path)
+        '/openproject': {
           target: 'http://192.168.0.200:8085',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/openproject/, ''),
+          rewrite: (path) => path.replace(/^\/openproject/, ''),
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {
               console.log('proxy error', err);

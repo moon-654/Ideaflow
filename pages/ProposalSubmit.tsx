@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { UploadCloud, ChevronDown, DollarSign, Sparkles, Loader2, Users, Trash2 } from 'lucide-react';
+import { ChevronDown, DollarSign, Sparkles, Loader2, Users, Trash2 } from 'lucide-react';
 import { useProposalStore } from '../context/ProposalContext';
 import { useNavigate } from 'react-router-dom';
 import { Proposal } from '../types';
 import { toast } from 'sonner';
 import RichTextEditor from '../components/RichTextEditor';
+import FileUpload from '../components/FileUpload';
 import { stripHtml } from '../utils/html';
 import { aiService } from '../services/aiService';
 
@@ -564,16 +565,11 @@ const ProposalSubmit: React.FC = () => {
           </div>
 
           {/* File Upload */}
-          <div className="space-y-3">
-            <label className="block text-sm font-bold text-slate-900">첨부 파일</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-primary/5 hover:border-primary/50 transition-all cursor-pointer group">
-              <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                <UploadCloud className="text-primary" size={32} />
-              </div>
-              <p className="font-medium text-slate-900">클릭하거나 파일을 이곳으로 드래그하세요</p>
-              <p className="text-xs text-slate-500 mt-1">PDF, JPG, PNG, XLSX (최대 10MB)</p>
-            </div>
-          </div>
+          <FileUpload
+            onFilesChange={(uploadedFiles) => console.log('Uploaded files:', uploadedFiles)}
+            maxFiles={5}
+            maxSizeMB={10}
+          />
 
         </div>
 
