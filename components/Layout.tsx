@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Menu, Search, Bell, Check, X } from 'lucide-react';
 import { useProposalStore } from '../context/ProposalContext';
@@ -11,6 +11,11 @@ const Layout: React.FC = () => {
     const { currentUser, notifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } = useProposalStore();
     const location = useLocation();
     const navigate = useNavigate();
+
+    // Redirect to login if not authenticated (empty id means guest/not logged in)
+    if (!currentUser || !currentUser.id) {
+        return <Navigate to="/login" replace />;
+    }
 
     // Derive active tab from path
     const currentPath = location.pathname.substring(1) || 'dashboard';

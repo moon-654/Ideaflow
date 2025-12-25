@@ -29,15 +29,15 @@ interface ProposalContextType {
     systemLogs: SystemLog[];
     settings: SettingsState;
     notifications: Notification[];  // In-app notifications
-    addProposal: (proposal: Proposal) => void;
-    updateProposal: (id: string, updates: Partial<Proposal>) => void;
-    addMileageLog: (log: MileageLog) => void;
+    addProposal: (proposal: Proposal) => Promise<void>;
+    updateProposal: (id: string, updates: Partial<Proposal>) => Promise<void>;
+    addMileageLog: (log: MileageLog) => Promise<void>;
     updateMileageLog: (id: string, updates: Partial<MileageLog>) => void;
-    updateSettings: (updates: Partial<SettingsState>) => void;
+    updateSettings: (updates: Partial<SettingsState>) => Promise<void>;
     setCurrentUser: (user: User) => void;
     addUser: (user: User) => void;
     removeUser: (id: string) => void;
-    updateUserRole: (userId: string, newRole: string) => void;
+    updateUserRole: (userId: string, newRole: string) => Promise<void>;
     updateUser: (userId: string, updates: Partial<User>) => void;
     syncUsersFromOpenProject: () => Promise<void>;
     syncProjectsFromOpenProject: () => Promise<void>;
@@ -80,6 +80,8 @@ interface ProposalContextType {
     agreeToContribution: (proposalId: string) => void;
     addManualMileageLog: (userId: string, points: number, reason: string) => void;
     voidMileageLog: (logId: string, reason: string) => void;
+    deleteMileageLog: (logId: string) => void;
+    bulkDeleteMileageLogs: (logIds: string[]) => void;
     processSelectedPayouts: (logIds: string[]) => string; // Returns new Batch ID
 }
 
@@ -101,9 +103,13 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return saved ? JSON.parse(saved) : MOCK_MILEAGE_LOGS;
     });
 
+    // Guest user for unauthenticated state (id is empty to trigger login redirect)
+    const GUEST_USER: User = { id: '', name: '', role: 'User', department: '', avatarUrl: '' };
+
     const [currentUser, setCurrentUser] = useState<User>(() => {
         const saved = localStorage.getItem('ideaflow_user');
-        return saved ? JSON.parse(saved) : CURRENT_USER;
+        // Return guest user if not logged in - triggers login redirect in Layout
+        return saved ? JSON.parse(saved) : GUEST_USER;
     });
 
     const [users, setUsers] = useState<User[]>(() => {
@@ -271,21 +277,16 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     console.log(`👥 Loaded ${apiUsers.length} users from API`);
                 }
                 if (apiDepartments && Array.isArray(apiDepartments) && apiDepartments.length > 0) {
-                    // Skip loading departments from API due to Korean encoding issues in DB
-                    // Use local defaults (MOCK_DEPARTMENTS) which have correct Korean text
-                    console.log(`🏢 Skipping API departments (${apiDepartments.length}) - using local Korean defaults`);
-                    // setDepartments(apiDepartments);  // Disabled due to encoding
+                    setDepartments(apiDepartments);
+                    console.log(`🏢 Loaded ${apiDepartments.length} departments from API`);
                 }
                 if (apiMileage && Array.isArray(apiMileage) && apiMileage.length > 0) {
                     setMileageLogs(apiMileage);
                     console.log(`💰 Loaded ${apiMileage.length} mileage logs from API`);
                 }
                 if (apiSettings && typeof apiSettings === 'object' && Object.keys(apiSettings).length > 0) {
-                    // Exclude categories and grades from API to preserve Korean defaults
-                    // (DB may have encoding issues with Korean text)
-                    const { categories, grades, ...safeSettings } = apiSettings as any;
-                    setSettings(prev => ({ ...prev, ...safeSettings }));
-                    console.log('⚙️ Loaded settings from API (excluding categories/grades)');
+                    setSettings(prev => ({ ...prev, ...apiSettings }));
+                    console.log('⚙️ Loaded settings from API');
                 }
 
             } catch (error) {
@@ -404,7 +405,7 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
     // Actions
-    const addProposal = (newProposal: Proposal) => {
+    const addProposal = async (newProposal: Proposal) => {
         // Generate Document Number if missing
         let proposalWithNumber = { ...newProposal };
         if (!proposalWithNumber.proposalNumber) {
@@ -427,6 +428,17 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             proposalWithNumber.proposalNumber = `${prefix}-${String(nextSeq).padStart(3, '0')}`;
         }
 
+        // Save to database via API
+        try {
+            if (isApiConnected) {
+                const { proposalsApi } = await import('../services/apiService');
+                await proposalsApi.create(proposalWithNumber);
+                console.log('✅ Proposal saved to database:', proposalWithNumber.proposalNumber);
+            }
+        } catch (error) {
+            console.error('❌ Failed to save proposal to DB, using localStorage fallback:', error);
+        }
+
         setProposals(prev => [proposalWithNumber, ...prev]);
 
         // Trigger Notification: New Proposal
@@ -447,7 +459,18 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     };
 
-    const updateProposal = (id: string, updates: Partial<Proposal>) => {
+    const updateProposal = async (id: string, updates: Partial<Proposal>) => {
+        // Save to database via API first
+        try {
+            if (isApiConnected) {
+                const { proposalsApi } = await import('../services/apiService');
+                await proposalsApi.update(id, updates);
+                console.log('✅ Proposal updated in database:', id);
+            }
+        } catch (error) {
+            console.error('❌ Failed to update proposal in DB:', error);
+        }
+
         setProposals(prev => prev.map(p => {
             if (p.id !== id) return p;
 
@@ -494,7 +517,18 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     };
 
-    const addMileageLog = (log: MileageLog) => {
+    const addMileageLog = async (log: MileageLog) => {
+        // Save to database via API
+        try {
+            if (isApiConnected) {
+                const { mileageApi } = await import('../services/apiService');
+                await mileageApi.create(log);
+                console.log('✅ Mileage log saved to database:', log.id);
+            }
+        } catch (error) {
+            console.error('❌ Failed to save mileage log to DB:', error);
+        }
+
         setMileageLogs(prev => [log, ...prev]);
     };
 
@@ -502,14 +536,36 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setMileageLogs(prev => prev.map(log => log.id === id ? { ...log, ...updates } : log));
     };
 
-    const updateSettings = (updates: Partial<SettingsState>) => {
+    const updateSettings = async (updates: Partial<SettingsState>) => {
+        // Save to database via API
+        try {
+            if (isApiConnected) {
+                const { settingsApi } = await import('../services/apiService');
+                await settingsApi.bulkUpdate(updates);
+                console.log('✅ Settings saved to database');
+            }
+        } catch (error) {
+            console.error('❌ Failed to save settings to DB:', error);
+        }
+
         setSettings(prev => ({ ...prev, ...updates }));
     };
 
     const addUser = (user: User) => setUsers(prev => [...prev, user]);
     const removeUser = (id: string) => setUsers(prev => prev.filter(u => u.id !== id));
 
-    const updateUserRole = (userId: string, newRole: string) => {
+    const updateUserRole = async (userId: string, newRole: string) => {
+        // Save to database via API
+        try {
+            if (isApiConnected) {
+                const { usersApi } = await import('../services/apiService');
+                await usersApi.update(userId, { role: newRole });
+                console.log('✅ User role updated in database:', userId);
+            }
+        } catch (error) {
+            console.error('❌ Failed to update user role in DB:', error);
+        }
+
         setUsers(prev => prev.map(u =>
             u.id === userId ? { ...u, role: newRole } : u
         ));
@@ -632,7 +688,9 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Logic Enhancement: Sync Departments from Users
             // Extract unique departments from the fetched users and add them to the departments list if missing
             const uniqueDepts = Array.from(new Set(opUsers.map(u => u.department || '미지정').filter(d => d && d !== '미지정')));
+            console.log(`🏢 [OpenProject Sync] Extracted ${uniqueDepts.length} unique departments:`, uniqueDepts);
 
+            let addedDepts: string[] = [];
             setDepartments(prev => {
                 const newDepts = [...prev];
                 uniqueDepts.forEach(deptName => {
@@ -642,8 +700,11 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                             name: deptName,
                             managerId: '' // Manager mapping logic can be added later
                         });
+                        addedDepts.push(deptName);
                     }
                 });
+                console.log(`🏢 [OpenProject Sync] Added ${addedDepts.length} new departments:`, addedDepts);
+                console.log(`🏢 [OpenProject Sync] Total departments now: ${newDepts.length}`);
                 return newDepts;
             });
 
@@ -654,6 +715,43 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     lastSync: new Date().toISOString()
                 }
             }));
+
+            // Save users and departments to database
+            try {
+                if (isApiConnected) {
+                    const { usersApi, departmentsApi } = await import('../services/apiService');
+
+                    // Bulk save/update users
+                    for (const opUser of opUsers) {
+                        try {
+                            await usersApi.create(opUser);
+                        } catch {
+                            // User might already exist, try update
+                            try {
+                                await usersApi.update(opUser.id, opUser);
+                            } catch (err) {
+                                console.warn('Failed to save user:', opUser.id, err);
+                            }
+                        }
+                    }
+                    console.log(`✅ Saved ${opUsers.length} users to database`);
+
+                    // Save new departments
+                    for (const deptName of uniqueDepts) {
+                        try {
+                            await departmentsApi.create({
+                                id: `dept-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                name: deptName
+                            });
+                        } catch {
+                            // Department might already exist, skip
+                        }
+                    }
+                    console.log(`✅ Synced ${uniqueDepts.length} departments to database`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to save OpenProject sync to DB:', error);
+            }
 
             addSystemLog({
                 id: Date.now().toString(),
@@ -951,6 +1049,54 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     };
 
+    const deleteMileageLog = async (logId: string) => {
+        const log = mileageLogs.find(l => l.id === logId);
+        setMileageLogs(prev => prev.filter(l => l.id !== logId));
+
+        // Persist to database
+        try {
+            const { mileageApi } = await import('../services/apiService');
+            await mileageApi.delete(logId);
+        } catch (error) {
+            console.error('Failed to delete mileage log:', error);
+        }
+
+        if (log) {
+            addSystemLog({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                user: currentUser.name,
+                action: 'Mileage Deleted',
+                details: `Admin deleted log ${logId} (${log.points} pts, ${log.userName})`,
+                level: 'Warning'
+            });
+        }
+    };
+
+    const bulkDeleteMileageLogs = async (logIds: string[]) => {
+        const deletedCount = logIds.length;
+        setMileageLogs(prev => prev.filter(l => !logIds.includes(l.id)));
+
+        // Persist to database
+        try {
+            const { mileageApi } = await import('../services/apiService');
+            for (const id of logIds) {
+                await mileageApi.delete(id);
+            }
+        } catch (error) {
+            console.error('Failed to bulk delete mileage logs:', error);
+        }
+
+        addSystemLog({
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            user: currentUser.name,
+            action: 'Bulk Mileage Delete',
+            details: `Admin deleted ${deletedCount} mileage log(s)`,
+            level: 'Warning'
+        });
+    };
+
     const processSelectedPayouts = (logIds: string[]) => {
         setMileageLogs(prev => prev.map(log =>
             logIds.includes(log.id) && log.status === 'Accrued' ? { ...log, status: 'Paid' } : log
@@ -1183,17 +1329,27 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     // Admin Proposal Management Functions
-    const softDeleteProposal = (proposalId: string, reason?: string) => {
-        setProposals(prev => prev.map(p => {
-            if (p.id !== proposalId) return p;
-            return {
-                ...p,
-                isDeleted: true,
-                deletedAt: new Date().toISOString(),
-                deletedBy: currentUser.name,
-                deletedReason: reason,
-            };
-        }));
+    const softDeleteProposal = async (proposalId: string, reason?: string) => {
+        const updateData = {
+            isDeleted: true,
+            deletedAt: new Date().toISOString(),
+            deletedBy: currentUser.name,
+            deletedReason: reason,
+        };
+
+        // Update local state immediately
+        setProposals(prev => prev.map(p =>
+            p.id === proposalId ? { ...p, ...updateData } : p
+        ));
+
+        // Persist to database
+        try {
+            const { proposalsApi } = await import('../services/apiService');
+            await proposalsApi.update(proposalId, updateData);
+        } catch (error) {
+            console.error('Failed to persist delete:', error);
+        }
+
         addSystemLog({
             id: `log_${Date.now()}`,
             timestamp: new Date().toISOString(),
@@ -1204,17 +1360,27 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
     };
 
-    const archiveProposal = (proposalId: string, reason?: string) => {
-        setProposals(prev => prev.map(p => {
-            if (p.id !== proposalId) return p;
-            return {
-                ...p,
-                isArchived: true,
-                archivedAt: new Date().toISOString(),
-                archivedBy: currentUser.name,
-                archivedReason: reason,
-            };
-        }));
+    const archiveProposal = async (proposalId: string, reason?: string) => {
+        const updateData = {
+            isArchived: true,
+            archivedAt: new Date().toISOString(),
+            archivedBy: currentUser.name,
+            archivedReason: reason,
+        };
+
+        // Update local state immediately
+        setProposals(prev => prev.map(p =>
+            p.id === proposalId ? { ...p, ...updateData } : p
+        ));
+
+        // Persist to database
+        try {
+            const { proposalsApi } = await import('../services/apiService');
+            await proposalsApi.update(proposalId, updateData);
+        } catch (error) {
+            console.error('Failed to persist archive:', error);
+        }
+
         addSystemLog({
             id: `log_${Date.now()}`,
             timestamp: new Date().toISOString(),
@@ -1225,19 +1391,46 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
     };
 
-    const hideProposal = (proposalId: string) => {
+    const hideProposal = async (proposalId: string) => {
         setProposals(prev => prev.map(p =>
             p.id === proposalId ? { ...p, isHidden: true } : p
         ));
+
+        // Persist to database
+        try {
+            const { proposalsApi } = await import('../services/apiService');
+            await proposalsApi.update(proposalId, { isHidden: true });
+        } catch (error) {
+            console.error('Failed to persist hide:', error);
+        }
     };
 
-    const unhideProposal = (proposalId: string) => {
+    const unhideProposal = async (proposalId: string) => {
         setProposals(prev => prev.map(p =>
             p.id === proposalId ? { ...p, isHidden: false } : p
         ));
+
+        // Persist to database
+        try {
+            const { proposalsApi } = await import('../services/apiService');
+            await proposalsApi.update(proposalId, { isHidden: false });
+        } catch (error) {
+            console.error('Failed to persist unhide:', error);
+        }
     };
 
-    const restoreProposal = (proposalId: string) => {
+    const restoreProposal = async (proposalId: string) => {
+        const updateData = {
+            isDeleted: false,
+            isArchived: false,
+            deletedAt: null,
+            deletedBy: null,
+            deletedReason: null,
+            archivedAt: null,
+            archivedBy: null,
+            archivedReason: null,
+        };
+
         setProposals(prev => prev.map(p => {
             if (p.id !== proposalId) return p;
             return {
@@ -1252,6 +1445,14 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 archivedReason: undefined,
             };
         }));
+
+        // Persist to database
+        try {
+            const { proposalsApi } = await import('../services/apiService');
+            await proposalsApi.update(proposalId, updateData);
+        } catch (error) {
+            console.error('Failed to persist restore:', error);
+        }
         addSystemLog({
             id: `log_${Date.now()}`,
             timestamp: new Date().toISOString(),
@@ -1423,6 +1624,8 @@ export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             updateMileageLog,
             addManualMileageLog,
             voidMileageLog,
+            deleteMileageLog,
+            bulkDeleteMileageLogs,
             processSelectedPayouts,
             payoutBatches,
             updateSettings,

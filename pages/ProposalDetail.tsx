@@ -525,6 +525,40 @@ const ProposalDetail: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* File Attachments Section */}
+                            {proposal.attachments && proposal.attachments.length > 0 && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">첨부 파일</label>
+                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                                        <div className="space-y-2">
+                                            {proposal.attachments.map((file, idx) => (
+                                                <a
+                                                    key={file.id || idx}
+                                                    href={file.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    download={file.fileName}
+                                                    className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:bg-primary/5 hover:border-primary/30 transition-colors group"
+                                                >
+                                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                        <FileText size={18} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-slate-900 truncate group-hover:text-primary">{file.fileName}</p>
+                                                        <p className="text-xs text-slate-400">
+                                                            {file.size ? `${(file.size / 1024).toFixed(1)} KB` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-xs text-primary font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        다운로드 →
+                                                    </span>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

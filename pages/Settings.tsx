@@ -170,21 +170,10 @@ const Settings: React.FC = () => {
 
               <div className="pt-4 border-t border-gray-100">
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-3">최종 등급별 포상</label>
-                <div className="grid grid-cols-2 gap-4">
-                  {['S', 'A', 'B', 'C'].map((grade) => (
-                    <div key={grade} className="flex items-center justify-between p-3 rounded bg-slate-50 border border-gray-200">
-                      <span className="font-bold text-slate-700 w-8">{grade}급</span>
-                      <div className="flex items-center gap-2 w-32">
-                        <input
-                          type="number"
-                          value={mileageRules[`grade${grade}` as keyof typeof mileageRules]}
-                          onChange={(e) => handleMileageChange(`grade${grade}` as keyof typeof mileageRules, e.target.value)}
-                          className="w-full px-2 py-1 text-right border border-gray-300 rounded text-sm font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
-                        />
-                        <span className="text-sm text-slate-400">점</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                  <p className="text-sm text-slate-600">
+                    등급별 마일리지 포인트는 아래 <span className="font-bold text-primary">"2차 심의 등급 관리"</span> 섹션에서 설정하세요.
+                  </p>
                 </div>
               </div>
             </div>
@@ -326,19 +315,13 @@ const Settings: React.FC = () => {
                 </div>
               </div>
 
-              {/* Evaluation Cutoff */}
+              {/* Evaluation Cutoff - Note */}
               <div className="pt-4 border-t border-gray-100">
                 <label className="text-xs font-bold text-slate-500 uppercase block mb-3">1차 심의 커트라인</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={settings.evaluationCutoff || 60}
-                    onChange={(e) => updateSettings({ evaluationCutoff: parseInt(e.target.value) || 60 })}
-                    className="w-32 px-3 py-2 border border-gray-300 rounded font-bold text-slate-900 bg-white focus:ring-primary focus:border-primary"
-                  />
-                  <span className="text-sm text-slate-400">점 미만 자동 탈락 (100점 만점)</span>
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                  <p className="text-sm text-slate-600">
+                    커트라인 점수는 아래 <span className="font-bold text-primary">"1차 심의 기준 관리"</span> 섹션에서 설정하세요.
+                  </p>
                 </div>
               </div>
             </div>

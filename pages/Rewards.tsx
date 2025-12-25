@@ -21,7 +21,7 @@ const TYPE_MAP: Record<string, string> = {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff4d4f', '#1890ff'];
 
 const Rewards: React.FC = () => {
-  const { mileageLogs, currentUser, proposals, settings, addManualMileageLog, voidMileageLog, processSelectedPayouts, users, payoutBatches } = useProposalStore();
+  const { mileageLogs, currentUser, proposals, settings, addManualMileageLog, voidMileageLog, deleteMileageLog, bulkDeleteMileageLogs, processSelectedPayouts, users, payoutBatches } = useProposalStore();
   const isAdmin = currentUser.role === 'Admin';
 
   const [activeTab, setActiveTab] = useState<'history' | 'admin' | 'analytics'>(isAdmin ? 'admin' : 'history');
@@ -178,6 +178,23 @@ const Rewards: React.FC = () => {
     }
   };
 
+  const handleDelete = (id: string) => {
+    if (!window.confirm('이 마일리지 기록을 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    deleteMileageLog(id);
+    toast.success('마일리지 기록이 삭제되었습니다.');
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedLogIds.length === 0) {
+      toast.error('삭제할 항목을 선택해주세요.');
+      return;
+    }
+    if (!window.confirm(`${selectedLogIds.length}개의 마일리지 기록을 완전히 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+    bulkDeleteMileageLogs(selectedLogIds);
+    setSelectedLogIds([]);
+    toast.success(`${selectedLogIds.length}개의 마일리지 기록이 삭제되었습니다.`);
+  };
+
   // Analytics Data
   const analyticsData = useMemo(() => {
     const monthlyData: any = {};
@@ -249,17 +266,26 @@ const Rewards: React.FC = () => {
 
         {isAdmin && (
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
-            <div className="flex items-center justify-between w-full mb-2">
-              <span className="text-sm font-medium text-slate-500">지급 관리</span>
-              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">{selectedLogIds.length}건 선택됨</span>
+            <div className="flex items-center justify-between w-full mb-3">
+              <span className="text-sm font-bold text-slate-700">선택 항목 관리</span>
+              <span className="text-sm bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-bold">{selectedLogIds.length}건</span>
             </div>
-            <button
-              onClick={handlePayoutPreview}
-              disabled={selectedLogIds.length === 0}
-              className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
-            >
-              <Send size={16} /> {selectedLogIds.length > 0 ? `${selectedLogIds.length}건 지급 실행` : '대상 선택 필요'}
-            </button>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedLogIds.length === 0}
+                className="flex-1 py-3 px-4 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                <Trash2 size={18} /> 삭제
+              </button>
+              <button
+                onClick={handlePayoutPreview}
+                disabled={selectedLogIds.length === 0}
+                className="flex-1 py-3 px-4 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                <Send size={18} /> 지급 실행
+              </button>
+            </div>
           </div>
         )}
       </div>

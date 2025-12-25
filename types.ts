@@ -150,8 +150,22 @@ export interface Proposal {
   contributors?: Contributor[]; // [NEW] Full contribution tracking
   executionTeamRatio?: number; // [NEW] Ratio allocated to Execution Team (0-100)
 
+  // File Attachments
+  attachments?: ProposalAttachment[];
+
   // Completion Report
   completionReport?: CompletionReport;
+}
+
+// Proposal Attachment
+export interface ProposalAttachment {
+  id: string;
+  fileName: string;
+  filePath: string;
+  url: string;
+  size: number;
+  mimeType: string;
+  uploadedAt?: string;
 }
 
 export interface CompletionReport {

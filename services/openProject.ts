@@ -1,6 +1,6 @@
 import { User } from '../types';
 
-const PROXY_PREFIX = '/api/openproject';
+const PROXY_PREFIX = '/openproject';
 
 // Helper to get base64 encoded API key
 const getAuthHeader = (apiKey: string) => {

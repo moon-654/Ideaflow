@@ -23,12 +23,15 @@ const Dashboard: React.FC = () => {
 
   // Calculate Stats based on Role
   const stats = useMemo(() => {
+    // Filter out deleted/archived proposals for accurate stats
+    const activeProposals = proposals.filter(p => !p.isDeleted && !p.isArchived);
+
     if (isReviewer) {
       // Reviewer/Admin View
-      const total = proposals.length;
-      const pending1st = proposals.filter(p => p.status === '1st_Review').length;
-      const pending2nd = proposals.filter(p => p.status === '2nd_Review').length;
-      const completed = proposals.filter(p => p.status === 'Completed').length;
+      const total = activeProposals.length;
+      const pending1st = activeProposals.filter(p => p.status === '1st_Review').length;
+      const pending2nd = activeProposals.filter(p => p.status === '2nd_Review').length;
+      const completed = activeProposals.filter(p => p.status === 'Completed').length;
 
       return [
         { title: '총 제안 건수', value: `${total}건`, sub: '전체 누적', icon: <FileText size={24} />, color: 'bg-blue-500', bg: 'bg-blue-50' },
@@ -38,7 +41,7 @@ const Dashboard: React.FC = () => {
       ];
     } else {
       // General User View
-      const myProposals = proposals.filter(p => p.proposer.id === currentUser.id);
+      const myProposals = activeProposals.filter(p => p.proposer.id === currentUser.id);
       const myTotal = myProposals.length;
       const myAccepted = myProposals.filter(p => p.status === 'Completed').length;
       const myMileage = mileageLogs
@@ -57,8 +60,9 @@ const Dashboard: React.FC = () => {
 
   // Calculate Department Stats (Admin/Reviewer Only)
   const departmentStats = useMemo(() => {
+    const activeProposals = proposals.filter(p => !p.isDeleted && !p.isArchived);
     const deptCounts: Record<string, number> = {};
-    proposals.forEach(p => {
+    activeProposals.forEach(p => {
       const dept = p.proposer.department;
       deptCounts[dept] = (deptCounts[dept] || 0) + 1;
     });
@@ -73,8 +77,9 @@ const Dashboard: React.FC = () => {
   }, [proposals]);
 
   const filteredProposals = useMemo(() => {
-    if (isReviewer) return proposals;
-    return proposals.filter(p => p.proposer.id === currentUser.id);
+    const activeProposals = proposals.filter(p => !p.isDeleted && !p.isArchived);
+    if (isReviewer) return activeProposals;
+    return activeProposals.filter(p => p.proposer.id === currentUser.id);
   }, [proposals, isReviewer, currentUser]);
 
   return (

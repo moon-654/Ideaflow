@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, DollarSign, Sparkles, Loader2, Users, Trash2 } from 'lucide-react';
 import { useProposalStore } from '../context/ProposalContext';
 import { useNavigate } from 'react-router-dom';
-import { Proposal } from '../types';
+import { Proposal, ProposalAttachment } from '../types';
 import { toast } from 'sonner';
 import RichTextEditor from '../components/RichTextEditor';
 import FileUpload from '../components/FileUpload';
@@ -23,6 +23,7 @@ const ProposalSubmit: React.FC = () => {
 
   const [isRefining, setIsRefining] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [attachments, setAttachments] = useState<ProposalAttachment[]>([]);
 
   // Contribution State
   const [contributors, setContributors] = useState<any[]>([
@@ -164,7 +165,8 @@ const ProposalSubmit: React.FC = () => {
       expectedEffect,
       expectedAmount: parseAmount(expectedAmount),
       contributors: settings.contribution?.enabled ? contributors : undefined,
-      executionTeamRatio: settings.contribution?.enabled ? contributors.find(c => c.type === 'Execution')?.ratio : undefined
+      executionTeamRatio: settings.contribution?.enabled ? contributors.find(c => c.type === 'Execution')?.ratio : undefined,
+      attachments: attachments.length > 0 ? attachments : undefined
     };
 
     // Contribution Validation
@@ -566,7 +568,7 @@ const ProposalSubmit: React.FC = () => {
 
           {/* File Upload */}
           <FileUpload
-            onFilesChange={(uploadedFiles) => console.log('Uploaded files:', uploadedFiles)}
+            onFilesChange={(uploadedFiles) => setAttachments(uploadedFiles as ProposalAttachment[])}
             maxFiles={5}
             maxSizeMB={10}
           />

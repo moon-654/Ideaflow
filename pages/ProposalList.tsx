@@ -12,6 +12,9 @@ const ProposalList: React.FC = () => {
 
     const filteredProposals = useMemo(() => {
         return proposals.filter(p => {
+            // Exclude deleted and archived proposals
+            if (p.isDeleted || p.isArchived) return false;
+
             const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 p.proposer.name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'All' || p.status === statusFilter;

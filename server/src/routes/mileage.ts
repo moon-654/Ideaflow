@@ -100,6 +100,21 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// DELETE mileage log
+router.delete('/:id', async (req, res) => {
+    try {
+        const pool = await getPool();
+        await pool.request()
+            .input('id', sql.NVarChar, req.params.id)
+            .query('DELETE FROM mileage_logs WHERE id = @id');
+
+        res.json({ success: true, message: 'Mileage log deleted' });
+    } catch (error) {
+        console.error('Error deleting mileage log:', error);
+        res.status(500).json({ error: 'Failed to delete mileage log' });
+    }
+});
+
 // POST process payout batch
 router.post('/payout', async (req, res) => {
     try {

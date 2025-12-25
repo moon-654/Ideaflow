@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
 import { Proposal } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Calendar, Filter, Download, TrendingUp, Users, CheckCircle, FileText, Sparkles, Loader2, Lightbulb } from 'lucide-react';
+import { Calendar, Filter, Download, TrendingUp, Users, CheckCircle, FileText, Sparkles, Loader2, Lightbulb, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 
@@ -23,6 +23,7 @@ const Report: React.FC = () => {
 
     const [aiInsight, setAiInsight] = useState<string>('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [excludeDeleted, setExcludeDeleted] = useState(true); // Default: exclude deleted proposals
 
     // Date Logic
     const dateRange = useMemo(() => {
@@ -64,10 +65,14 @@ const Report: React.FC = () => {
     // Data Filtering
     const filteredProposals = useMemo(() => {
         return proposals.filter(p => {
+            // Exclude deleted/archived if toggle is on
+            if (excludeDeleted && (p.isDeleted || p.isArchived)) {
+                return false;
+            }
             const pDate = new Date(p.date); // Assumes p.date is ISO or YYYY-MM-DD
             return pDate >= dateRange.start && pDate <= dateRange.end;
         });
-    }, [proposals, dateRange]);
+    }, [proposals, dateRange, excludeDeleted]);
 
     // Statistics Calculation
     const stats = useMemo(() => {
@@ -271,9 +276,25 @@ const Report: React.FC = () => {
                         )}
                     </div>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-slate-500 flex items-center gap-2">
-                    <Calendar size={14} />
-                    조회 기간: <span className="font-bold text-slate-700">{dateRange.start.toLocaleDateString()} ~ {dateRange.end.toLocaleDateString()}</span>
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                        <Calendar size={14} />
+                        조회 기간: <span className="font-bold text-slate-700">{dateRange.start.toLocaleDateString()} ~ {dateRange.end.toLocaleDateString()}</span>
+                    </div>
+                    <button
+                        onClick={() => setExcludeDeleted(!excludeDeleted)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${excludeDeleted
+                                ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                                : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                            }`}
+                    >
+                        <Trash2 size={14} />
+                        {excludeDeleted ? (
+                            <><ToggleRight size={18} /> 삭제 제외됨</>
+                        ) : (
+                            <><ToggleLeft size={18} /> 삭제 포함</>
+                        )}
+                    </button>
                 </div>
             </div>
 

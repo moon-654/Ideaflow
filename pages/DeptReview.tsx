@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProposalStore } from '../context/ProposalContext';
-import { CheckCircle, XCircle, Clock, RotateCcw, ChevronDown, ChevronUp, DollarSign, Users, Search } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, RotateCcw, ChevronDown, ChevronUp, DollarSign, Users, Search, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { stripHtml } from '../utils/html';
 import DOMPurify from 'dompurify';
@@ -11,8 +11,9 @@ const DeptReview: React.FC = () => {
   // Check Permission
   const hasPermission = currentUser.role === 'Admin' || currentUser.canDeptReview;
 
-  // Filter for Dept_Review status AND matching target department
+  // Filter for Dept_Review status AND matching target department (exclude deleted)
   const deptProposals = proposals.filter(p =>
+    !p.isDeleted && !p.isArchived &&
     p.status === 'Dept_Review' &&
     (p.targetDepartment === currentUser.department || currentUser.role === 'Admin')
   );
@@ -354,6 +355,40 @@ const DeptReview: React.FC = () => {
                           <span className="text-sm font-bold text-green-700">
                             예상 효과 금액: {proposal.expectedAmount.toLocaleString('ko-KR')}원 / 연
                           </span>
+                        </div>
+                      )}
+
+                      {/* File Attachments Section */}
+                      {proposal.attachments && proposal.attachments.length > 0 && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">첨부 파일</label>
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div className="space-y-2">
+                              {proposal.attachments.map((file: any, idx: number) => (
+                                <a
+                                  key={file.id || idx}
+                                  href={file.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={file.fileName}
+                                  className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-200 hover:bg-primary/5 hover:border-primary/30 transition-colors group"
+                                >
+                                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <FileText size={14} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary">{file.fileName}</p>
+                                    <p className="text-xs text-slate-400">
+                                      {file.size ? `${(file.size / 1024).toFixed(1)} KB` : ''}
+                                    </p>
+                                  </div>
+                                  <span className="text-xs text-primary font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                    다운로드
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

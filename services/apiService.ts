@@ -106,6 +106,9 @@ export const mileageApi = {
         method: 'PUT',
         body: JSON.stringify(data),
     }),
+    delete: (id: string) => apiFetch<any>(`/mileage/${id}`, {
+        method: 'DELETE',
+    }),
     processPayout: (logIds: string[], processedBy: string) => apiFetch<any>('/mileage/payout', {
         method: 'POST',
         body: JSON.stringify({ logIds, processedBy }),
